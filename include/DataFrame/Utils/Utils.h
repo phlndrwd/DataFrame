@@ -103,14 +103,13 @@ struct tuple_filter;
 template <class ... Out, class InFirst, class ... InRest>
 struct tuple_filter<std::tuple<Out...>, std::tuple<InFirst, InRest...>>  {
 
-    using type =
-        typename std::conditional<
-            tuple_contain<std::tuple<Out...>, InFirst>::value,
+    using type = typename std::conditional<
+        tuple_contain<std::tuple<Out...>, InFirst>::value,
             typename tuple_filter<std::tuple<Out...>,
                                   std::tuple<InRest...>>::type,
             typename tuple_filter<std::tuple<Out..., InFirst>,
                                   std::tuple<InRest...>>::type
-        >::type;
+    >::type;
 };
 
 template <class Out>
@@ -124,11 +123,11 @@ template <typename Out, typename Tuple>
 struct append_inner_type;
 
 template <class... Out, class InFirst, class... InRest>
-struct append_inner_type<std::tuple<Out...>, std::tuple<InFirst, InRest...>> {
+struct append_inner_type<std::tuple<Out...>, std::tuple<InFirst, InRest...>>  {
 
-    using type =
-        typename append_inner_type<std::tuple<typename InFirst::type, Out...>,
-                                   std::tuple<InRest...>>::type;
+    using type = typename append_inner_type<
+        std::tuple<typename InFirst::type, Out...>,
+        std::tuple<InRest...>>::type;
 };
 
 template <typename Out>
@@ -237,8 +236,7 @@ abs__<long long>(const long long &val)  { return (std::llabs(val)); }
 
 template<>
 inline auto
-// abs__<float>(const float &val)  { return (std::fabsf(val)); }
-abs__<float>(const float &val)  { return (std::fabs(val)); }
+abs__<float>(const float &val)  { return (std::fabsf(val)); }
 
 template<>
 inline auto
@@ -246,13 +244,12 @@ abs__<double>(const double &val)  { return (std::fabs(val)); }
 
 template<>
 inline auto
-// abs__<long double>(const long double &val)  { return (std::fabsl(val)); }
-abs__<long double>(const long double &val)  { return (std::fabs(val)); }
+abs__<long double>(const long double &val)  { return (std::fabsl(val)); }
 
 // ----------------------------------------------------------------------------
 
 template<typename V>
-[[nodiscard]] inline bool
+inline bool
 is_monotonic_increasing(const V &column)  {
 
     const std::size_t   col_s { column.size() };
@@ -266,7 +263,7 @@ is_monotonic_increasing(const V &column)  {
 // ----------------------------------------------------------------------------
 
 template<typename V>
-[[nodiscard]] inline bool
+inline bool
 is_strictly_monotonic_increasing(const V &column)  {
 
     const std::size_t   col_s { column.size() };
@@ -280,7 +277,7 @@ is_strictly_monotonic_increasing(const V &column)  {
 // ----------------------------------------------------------------------------
 
 template<typename V>
-[[nodiscard]] inline bool
+inline bool
 is_monotonic_decreasing(const V &column)  {
 
     const std::size_t   col_s { column.size() };
@@ -294,7 +291,7 @@ is_monotonic_decreasing(const V &column)  {
 // ----------------------------------------------------------------------------
 
 template<typename V>
-[[nodiscard]] inline bool
+inline bool
 is_strictly_monotonic_decreasing(const V &column)  {
 
     const std::size_t   col_s { column.size() };

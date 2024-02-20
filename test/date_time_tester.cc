@@ -117,12 +117,13 @@ int main (int, char *[])  {
     now = "20100207 12:32:12";
 
     try  {
-        const auto  diff = now.diff_seconds (gmnow);
+        now.diff_seconds (gmnow);
 
-        std::cout << "The diff is: " << diff << std::endl;
+        assert(false);
     }
-    catch (const std::runtime_error &ex)  {
-        cout << ex.what();
+    catch (const std::runtime_error &)  {
+        // cout << ex.what();
+        ; // Time diff between different timezones is not implemented
     }
 
     {
@@ -910,7 +911,7 @@ int main (int, char *[])  {
     }
 
     {
-        DateTime    dt("2015/01/05 09:40:00", DT_DATE_STYLE::EUR_STYLE);
+        DateTime    dt("2015/01/05 09:40:00", hmdf::DT_DATE_STYLE::EUR_STYLE);
         DateTime    dt2;
 
         dt2 = "20150105 09:40:00";
@@ -918,10 +919,12 @@ int main (int, char *[])  {
     }
 
     {
-        DateTime    dt("2015/01/05 09:40:30", DT_DATE_STYLE::EUR_STYLE);
-        DateTime    dt2("2015-01-05 09:40:30", DT_DATE_STYLE::ISO_STYLE);
-        DateTime    dt3("2015/01/05 09:40:30.123", DT_DATE_STYLE::EUR_STYLE);
-        DateTime    dt4("2015-01-05 09:40:30.123", DT_DATE_STYLE::ISO_STYLE);
+        DateTime    dt("2015/01/05 09:40:30", hmdf::DT_DATE_STYLE::EUR_STYLE);
+        DateTime    dt2("2015-01-05 09:40:30", hmdf::DT_DATE_STYLE::ISO_STYLE);
+        DateTime    dt3("2015/01/05 09:40:30.123",
+                       hmdf::DT_DATE_STYLE::EUR_STYLE);
+        DateTime    dt4("2015-01-05 09:40:30.123",
+                       hmdf::DT_DATE_STYLE::ISO_STYLE);
 
         assert(dt == dt2);
         assert(dt3 == dt4);
@@ -930,90 +933,13 @@ int main (int, char *[])  {
     {
         std::cout << "Testing arithmetic operators ..." << std::endl;
 
-        const DateTime  dt("2015/01/05 09:40:30", DT_DATE_STYLE::EUR_STYLE);
-        const DateTime  now3;
+        DateTime    dt("2015/01/05 09:40:30", hmdf::DT_DATE_STYLE::EUR_STYLE);
+        DateTime    now;
 
-        std::cout << "+ operator: " << dt + now3 << std::endl;
-        std::cout << "- operator: " << dt - now3 << std::endl;
-        std::cout << "* operator: " << dt * now3 << std::endl;
-        std::cout << "/ operator: " << dt / now3 << std::endl;
-
-        std::cout << "DateTime vs. double +:" << std::endl;
-        std::cout << "Original DateTime: " << double(dt) << std::endl;
-        std::cout << "+ operator: " << dt + 0.0001 << std::endl;
-        std::cout << "- operator: " << dt - 1.0 << std::endl;
-        std::cout << "* operator: " << dt * 1.0 << std::endl;
-        std::cout << "/ operator: " << dt / 2.0 << std::endl;
-
-        std::cout << "double vs. DateTime +:" << std::endl;
-        std::cout << "Original DateTime: " << double(dt) << std::endl;
-        std::cout << "+ operator: " << 0.0001 + dt << std::endl;
-        std::cout << "- operator: " << 1.0 - dt << std::endl;
-        std::cout << "* operator: " << 1.0 * dt << std::endl;
-        std::cout << "/ operator: " << 1400000009.0 / dt << std::endl;
-
-        DateTime    dt2("2015/01/05 09:40:30", DT_DATE_STYLE::EUR_STYLE);
-
-        std::cout << "DateTime vs. double +=:" << std::endl;
-        std::cout << "Original DateTime: " << double(dt2) << std::endl;
-        dt2 += 0.0001;
-        std::cout << "+= operator: " << double(dt2) << std::endl;
-        dt2 -= 1.0001;
-        std::cout << "-= operator: " << double(dt2) << std::endl;
-        dt2 *= 2.0;
-        std::cout << "*= operator: " << double(dt2) << std::endl;
-        dt2 /= 2.0;
-        std::cout << "/= operator: " << double(dt2) << std::endl;
-    }
-
-    {
-        std::cout << "Testing ISO format parsing ..." << std::endl;
-
-        const DateTime  dt1("2018-12-21 13:07:35", DT_DATE_STYLE::ISO_STYLE);
-
-        std::cout << "2018-12-21 13:07:35 == "
-                  << dt1.string_format (DT_FORMAT::ISO_DT_TM) << std::endl;
-
-        const DateTime  dt2("2018-12-21 13:07:35.5", DT_DATE_STYLE::ISO_STYLE);
-
-        std::cout << "2018-12-21 13:07:35.5 == "
-                  << dt2.string_format (DT_FORMAT::ISO_DT_TM) << std::endl;
-
-        const DateTime  dt3("2018-12-21 13:07:35.55", DT_DATE_STYLE::ISO_STYLE);
-
-        std::cout << "2018-12-21 13:07:35.55 == "
-                  << dt3.string_format (DT_FORMAT::ISO_DT_TM) << std::endl;
-
-        const DateTime  dt4("2018-12-21 13:07:35.555",
-                            DT_DATE_STYLE::ISO_STYLE);
-
-        std::cout << "2018-12-21 13:07:35.555 == "
-                  << dt4.string_format (DT_FORMAT::ISO_DT_TM) << std::endl;
-
-        const DateTime  dt5("2018-12-21 13:07:35.882764",
-                            DT_DATE_STYLE::ISO_STYLE);
-
-        std::cout << "2018-12-21 13:07:35.882764 == "
-                  << dt5.string_format (DT_FORMAT::ISO_DT_TM) << std::endl;
-
-        const DateTime  dt6("2018-12-21 13:07:35.882764+00",
-                            DT_DATE_STYLE::ISO_STYLE);
-
-        std::cout << "2018-12-21 13:07:35.882764+00 == "
-                  << dt6.string_format (DT_FORMAT::ISO_DT_TM) << std::endl;
-
-        const DateTime  dt7("2018-12-21 13:07:35+00", DT_DATE_STYLE::ISO_STYLE);
-
-        std::cout << "2018-12-21 13:07:35+00 == "
-                  << dt7.string_format (DT_FORMAT::ISO_DT_TM) << std::endl;
-
-        const DateTime  dt8("2018-12-21 13:07:35.123456789+00",
-                            DT_DATE_STYLE::ISO_STYLE);
-		std::string     result;
-
-        dt8.date_to_str (DT_FORMAT::ISO_DT_NANO, result);
-        std::cout << "2018-12-21 13:07:35.123456789+00 == " << result
-                  << std::endl;
+        std::cout << "+ operator: " << dt + now << std::endl;
+        std::cout << "- operator: " << dt - now << std::endl;
+        std::cout << "* operator: " << dt * now << std::endl;
+        std::cout << "/ operator: " << dt / now << std::endl;
     }
 
     test_priority_queue();

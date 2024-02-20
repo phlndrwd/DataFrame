@@ -29,8 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
-#include <DataFrame/Utils/Threads/ThreadPool.h>
-
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <thread>
@@ -42,28 +41,30 @@ namespace hmdf
 
 struct  ThreadGranularity  {
 
-    using size_type = ThreadPool::size_type;
+    static inline void
+    set_thread_level(unsigned int n)  { num_of_threads_ = n; }
+    static inline unsigned int
+    get_thread_level()  { return (num_of_threads_); }
+    static inline unsigned int
+    get_supported_thread()  { return (supported_threads_); }
 
-    static inline void set_thread_level(size_type n)  {
+    static inline unsigned int
+    get_sensible_thread_level()  {
 
-        thr_pool_.add_thread(n - thr_pool_.capacity_threads());
+        return (supported_threads_ != 0
+                    ? std::min(supported_threads_, num_of_threads_)
+                    : num_of_threads_);
     }
-    static inline void set_optimum_thread_level()  {
-
-        set_thread_level(std::thread::hardware_concurrency());
-    }
-    static inline size_type get_thread_level()  {
-
-        return (thr_pool_.capacity_threads());
-    }
-
-    // By defaut, there are no threads
-    //
-    inline static ThreadPool    thr_pool_ { 0 };
 
 protected:
 
     ThreadGranularity() = default;
+
+private:
+
+    inline static unsigned int          num_of_threads_ { 0 };
+    inline static const unsigned int    supported_threads_ {
+        std::thread::hardware_concurrency() };
 };
 
 // ----------------------------------------------------------------------------
@@ -77,7 +78,7 @@ struct  SpinLock  {
 
         const std::thread::id   thr_id = std::this_thread::get_id();
 
-        if (thr_id != owner_) [[likely]]  {
+        if (thr_id != owner_)  {
 #ifdef __cpp_lib_atomic_flag_test
             while (true) {
                 if (! lock_.test_and_set(std::memory_order_acquire)) break;
@@ -91,7 +92,7 @@ struct  SpinLock  {
 
         count_ += 1;
     }
-    [[nodiscard]] inline bool try_lock() noexcept {
+    inline bool try_lock() noexcept {
 
         const std::thread::id   thr_id = std::this_thread::get_id();
 
@@ -107,7 +108,7 @@ struct  SpinLock  {
 
         const std::thread::id   thr_id = std::this_thread::get_id();
 
-        if (thr_id == owner_) [[likely]]  {
+        if (thr_id == owner_)  {
             count_ -= 1;
 
             assert(count_ >= 0);
@@ -133,7 +134,7 @@ private:
 
 struct  SpinGuard  {
 
-    inline explicit
+    inline
     SpinGuard(SpinLock *l) noexcept : lock_(l)  { if (lock_)  lock_->lock(); }
     inline ~SpinGuard() noexcept  { if (lock_)  lock_->unlock(); }
 
@@ -152,66 +153,6 @@ struct  SpinGuard  {
 private:
 
     SpinLock    *lock_;
-};
-
-// ----------------------------------------------------------------------------
-
-// This is a lock-free and wait-free synchronization that allows consistent
-// reads and writes from multiple threads.
-// Single producer, multiple consumers.
-//
-template<typename T>
-struct  SeqLock  {
-
-    using value_type = T;
-    using size_type = std::size_t;
-
-    SeqLock() = default;
-    inline explicit SeqLock (const value_type &value) : value_(value)  {   }
-
-    // There can be only a single producer at a time
-    //
-    void store(const value_type &value) noexcept  {
-
-        const size_type seq_0 = seq_.load (std::memory_order_relaxed);
-
-        seq_.store (seq_0 + 1, std::memory_order_relaxed);
-        std::atomic_thread_fence (std::memory_order_release);
-
-        value_ = value;
-
-        std::atomic_thread_fence (std::memory_order_release);
-        seq_.store (seq_0 + 2, std::memory_order_relaxed);
-    }
-
-    // There can be multiple consumers concurrently
-    //
-    [[nodiscard]] value_type load() const noexcept  {
-
-        while (true)  {
-            const size_type seq_1 = seq_.load (std::memory_order_relaxed);
-
-            if (! (seq_1 & 0x01)) [[likely]]  {
-                std::atomic_thread_fence (std::memory_order_acquire);
-
-                const value_type    copy = value_;
-
-                std::atomic_thread_fence (std::memory_order_acquire);
-                if (seq_1 == seq_.load (std::memory_order_relaxed)) [[likely]]
-                    return (copy);
-            }
-        }
-    }
-
-    SeqLock (const SeqLock &) = delete;
-    SeqLock &operator = (const SeqLock &) = delete;
-    SeqLock (SeqLock &&) = delete;
-    SeqLock &operator = (SeqLock &&) = delete;
-
-private:
-
-    value_type          value_ { };
-    std::atomic_size_t  seq_ { 0 };
 };
 
 } // namespace hmdf

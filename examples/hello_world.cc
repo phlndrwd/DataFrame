@@ -51,7 +51,7 @@ using StrDataFrame = StdDataFrame<std::string>;
 //
 using DTDataFrame = StdDataFrame<DateTime>;
 
-// This is just some arbitrary type to show how any type, including the DataFrame itself, could be in DataFrame
+// This is just some arbitrary type to show how any type could be in DataFrame
 //
 struct  MyData  {
     int         i { 10 };
@@ -68,17 +68,6 @@ struct  MyData  {
 // https://htmlpreview.github.io/?https://github.com/hosseinmoein/DataFrame/blob/master/docs/HTML/DataFrame.html
 //
 int main(int, char *[])  {
-
-    // If you want to fully take advantage of DataFrame parallel computing logic,
-    // it is recommended to call the following at the beginning of your program.
-    //
-    // NOTE: make sure you read and understand the Multithreading section
-    //       in the documentations (threads could potentially hinder performance).
-    //       This program (hello world) is a perfect example. Since I know this program doesn’t
-    //       deal with large datasets to trigger multithreaded algorithms, populating the thread-pool
-    //       with threads (i.e. calling set_optimum_thread_level()) is a waste of resources.
-    //
-    ThreadGranularity::set_optimum_thread_level();
 
     std::vector<unsigned long>  idx_col1 = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
     std::vector<MyData>         mydata_col (10);
@@ -111,9 +100,9 @@ int main(int, char *[])  {
     // In this case again the data is moved to the DataFrame.
     //
     ul_df2.load_data(std::move(idx_col2),
-                     std::make_pair("string col",  str_col),
+                     std::make_pair("string col", str_col),
                      std::make_pair("Cool Column", cool_col),
-                     std::make_pair("numbers",     dbl_col2));
+                     std::make_pair("numbers", dbl_col2));
 
     StrDataFrame    ibm_df;
 
@@ -135,8 +124,8 @@ int main(int, char *[])  {
 
     std::cout << cool_col_ref[1] << cool_col_ref[2] << cool_col_ref[3] << std::endl;
     std::cout << "Str Column = ";
-    for (const auto &str : str_col_ref)
-        std::cout << str << ", ";
+    for (auto citer : str_col_ref)
+        std::cout << citer << ", ";
     std::cout << std::endl;
 
     std::cout << "There are " << ibm_df.get_column<double>("IBM_Close").size()
@@ -194,7 +183,7 @@ int main(int, char *[])  {
     auto    gb_df =
         ul_df1.groupby1<double>("dbl_col",
                                 LastVisitor<ul_idx_t, ul_idx_t>(),
-                                std::make_tuple("integers",    "sum_int",      SumVisitor<int>()),
+                                std::make_tuple("integers", "sum_int", SumVisitor<int>()),
                                 std::make_tuple("my_data_col", "last_my_data", LastVisitor<MyData>()));
 
     // You can run statistical, financial, ML, … algorithms on one or multiple columns by using visitors.
@@ -251,33 +240,19 @@ int main(int, char *[])  {
 
     using dt_idx_t = DTDataFrame::IndexType;  // This is just DateTime.
 
-    // Appel data are daily. Let’s create 10-day OHLC (plus a bunch of other stats) for close prices.
+    // Appel data are daily. Let’s create 10-day OHLC (plus mean, std, total volume) for close prices.
     //
     DTDataFrame aapl_ohlc =
-        aapl_dt_df.bucketize(
-            bucket_type::by_count,
-            10,
-            LastVisitor<dt_idx_t, dt_idx_t>(),  // How to bucketize the index column
-            std::make_tuple("AAPL_Close",  "Open",          FirstVisitor<double, dt_idx_t>()),
-            std::make_tuple("AAPL_Close",  "High",          MaxVisitor<double, dt_idx_t>()),
-            std::make_tuple("AAPL_Close",  "Low",           MinVisitor<double, dt_idx_t>()),
-            std::make_tuple("AAPL_Close",  "Close",         LastVisitor<double, dt_idx_t>()),
-            std::make_tuple("AAPL_Close",  "Mean",          MeanVisitor<double, dt_idx_t>()),
-            std::make_tuple("AAPL_Close",  "Median",        MedianVisitor<double, dt_idx_t>()),
-            std::make_tuple("AAPL_Close",  "25% Quantile",  QuantileVisitor<double, dt_idx_t>(0.25)),
-            std::make_tuple("AAPL_Close",  "Std",           StdVisitor<double, dt_idx_t>()),
-            // "Mode" column is a column of std::array<ModeVisitor::DataItem, 2>'s -- It cannot be printed by default
-            std::make_tuple("AAPL_Close",  "Mode",          ModeVisitor<2, double, dt_idx_t>()),
-            std::make_tuple("AAPL_Close",  "MAD",           MADVisitor<double, dt_idx_t>(mad_type::mean_abs_dev_around_mean)),
-            // "Z Score" column is a column of std::vector<double>'s
-            std::make_tuple("AAPL_Close",  "Z Score",       ZScoreVisitor<double, dt_idx_t>()),
-            // "Return Vector" column is a column of std::vector<double>'s
-            std::make_tuple("AAPL_Close",  "Return Vector", ReturnVisitor<double, dt_idx_t>(return_policy::log)),
-            std::make_tuple("AAPL_Volume", "Volume",        SumVisitor<long, dt_idx_t>()));
-
-    // Big output
-    //
-    // aapl_ohlc.write<std::ostream, double, long, std::vector<double>>(std::cout, io_format::csv2);
+        aapl_dt_df.bucketize(bucket_type::by_count,
+                             10,
+                             LastVisitor<dt_idx_t, dt_idx_t>(),
+                             std::make_tuple("AAPL_Close", "Open", FirstVisitor<double, dt_idx_t>()),
+                             std::make_tuple("AAPL_Close", "High", MaxVisitor<double, dt_idx_t>()),
+                             std::make_tuple("AAPL_Close", "Low", MinVisitor<double, dt_idx_t>()),
+                             std::make_tuple("AAPL_Close", "Close", LastVisitor<double, dt_idx_t>()),
+                             std::make_tuple("AAPL_Close", "Mean", MeanVisitor<double, dt_idx_t>()),
+                             std::make_tuple("AAPL_Close", "Std", StdVisitor<double, dt_idx_t>()),
+                             std::make_tuple("AAPL_Volume", "Volume", SumVisitor<long, dt_idx_t>()));
 
     // Now let's get a view of a random sample of appel data. We randomly sample 35% of the data.
     //
@@ -285,7 +260,7 @@ int main(int, char *[])  {
 
     // ---------------------------------------------------
     //
-    // Now let’s do some stuff that are a little more involved (multi steps).
+    // Now let’s do some stuffs that are a little more involved (multi steps).
     // There are a lot of theories, math, and procedures that I am skipping to explain here.
     // See docs for more details.
     //
@@ -301,7 +276,8 @@ int main(int, char *[])  {
 
     // Calculate the returns and load them as a column.
     //
-    ibm_dt_df.load_result_as_column<double>("IBM_Close", std::move(return_v), "IBM_Return");
+    ibm_dt_df.single_act_visit<double>("IBM_Close", return_v);
+    ibm_dt_df.load_result_as_column(return_v, "IBM_Return");
     ibm_dt_df.get_column<double>("IBM_Return")[0] = 0;  // Remove the NaN
 
     // Let's try to find 4 clusters.
@@ -313,16 +289,16 @@ int main(int, char *[])  {
     const auto  &cluster_means = kmeans_v.get_result();
 
     std::cout << "Means of clusters are: ";
-    for (const auto &mean : cluster_means)
-        std::cout << mean << ", ";
+    for (const auto citer : cluster_means)
+        std::cout << citer << ", ";
     std::cout << std::endl;
     /*
     // This produces a very large output.
     //
     std::cout << "\nClusters are: ";
-    for (const auto &mean1 : kmeans_v.get_clusters())  {
-        for (const auto &mean2 : mean1)
-            std::cout << mean2 << ", ";
+    for (const auto &citer1 : kmeans_v.get_clusters())  {
+        for (const auto &citer2 : citer1)
+            std::cout << citer2 << ", ";
         std::cout << '\n' << std::endl;
     }
     */
@@ -351,7 +327,7 @@ int main(int, char *[])  {
     //
     ibm_dt_df.single_act_visit<double>("IBM_Return", decom);
 
-    // But what if you don’t know the seasonality of IBM returns which would be most of the time.
+    // But what of you don’t know the seasonality of IBM returns which would be most of the time.
     // No worries, Mr Joseph Fourier comes to the rescue.
     //
     FastFourierTransVisitor<double, DateTime>   fft;

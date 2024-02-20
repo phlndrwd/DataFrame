@@ -31,6 +31,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cstring>
 #include <string>
+#include <unordered_map>
 
 // ----------------------------------------------------------------------------
 
@@ -45,15 +46,15 @@ DataFrame<I, H>::create_column (const char *name, bool do_lock)  {
     static_assert(std::is_base_of<HeteroVector<align_value>, DataVec>::value,
                   "Only a StdDataFrame can call create_column()");
 
-    if (! ::strcmp(name, DF_INDEX_COL_NAME)) [[unlikely]]
+    if (! ::strcmp(name, DF_INDEX_COL_NAME))
         throw DataFrameError ("DataFrame::create_column(): ERROR: "
                               "Data column name cannot be 'INDEX'");
-    if (column_tb_.find(name) != column_tb_.end()) [[unlikely]]
+    if (column_tb_.find(name) != column_tb_.end())
        return (get_column<T>(name));
 
     const SpinGuard guard(do_lock ? lock_ : nullptr);
 
-    if (column_list_.empty()) [[unlikely]]  {
+    if (column_list_.empty())  {
         column_list_.reserve(32);
         data_.reserve(32);
     }
@@ -70,22 +71,30 @@ DataFrame<I, H>::create_column (const char *name, bool do_lock)  {
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T>
 void DataFrame<I, H>::remove_column (const char *name)  {
 
     static_assert(std::is_base_of<HeteroVector<align_value>, DataVec>::value,
                   "Only a StdDataFrame can call remove_column()");
 
-    ColumnVecType<T>    &vec = get_column<T>(name);
+    if (! ::strcmp(name, DF_INDEX_COL_NAME))
+        throw DataFrameError ("DataFrame::remove_column(): ERROR: "
+                              "Data column name cannot be 'INDEX'");
 
-    // Free the memory space
-    //
-    vec = std::move(ColumnVecType<T>{ });
+    const auto  iter = column_tb_.find (name);
+
+    if (iter == column_tb_.end())  {
+        char    buffer [512];
+
+        snprintf (buffer, sizeof(buffer) - 1,
+                  "DataFrame::remove_column(): ERROR: Cannot find column '%s'",
+                  name);
+        throw ColNotFound (buffer);
+    }
 
     // I do not erase the column from the data_ vector, because it will mess up
     // indices in the hash table column_tb_
     /* data_.erase (data_.begin() + iter->second); */
-    column_tb_.erase (name);
+    column_tb_.erase (iter);
     for (size_type i = 0; i < column_list_.size(); ++i)  {
         if (column_list_[i].first == name)  {
             column_list_.erase(column_list_.begin() + i);
@@ -99,42 +108,9 @@ void DataFrame<I, H>::remove_column (const char *name)  {
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T>
 void DataFrame<I, H>::remove_column(size_type index)  {
 
-    return (remove_column<T>(column_list_[index].first.c_str()));
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-void DataFrame<I, H>::clear()  {
-
-    {
-        const SpinGuard guard(lock_);
-
-        data_.clear();
-    }
-    indices_.clear();
-    column_tb_.clear();
-    column_list_.clear();
-    return;
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-void DataFrame<I, H>::swap(DataFrame &other)  {
-
-    {
-        const SpinGuard guard(lock_);
-
-        data_.swap(other.data_);
-    }
-    indices_.swap(other.indices_);
-    column_tb_.swap(other.column_tb_);
-    column_list_.swap(other.column_list_);
-    return;
+    return (remove_column(column_list_[index].first.c_str()));
 }
 
 // ----------------------------------------------------------------------------
@@ -172,13 +148,7 @@ void DataFrame<I, H>::rename_column (const char *from, const char *to)  {
 
     column_tb_.emplace (to, from_iter->second);
     column_list_.emplace_back (to, from_iter->second);
-    column_tb_.erase (from);
-    for (size_type i = 0; i < column_list_.size(); ++i)  {
-        if (column_list_[i].first == from)  {
-            column_list_.erase(column_list_.begin() + i);
-            break;
-        }
-    }
+    remove_column(from);
     return;
 }
 
@@ -203,7 +173,7 @@ retype_column (const char *name,
     new_vec.reserve(old_vec.size());
     for (const auto &citer : old_vec)
         new_vec.push_back(std::move(convert_func(citer)));
-    remove_column<FROM_T>(name);
+    remove_column(name);
     load_column<TO_T>(name, std::move(new_vec));
     return;
 }
@@ -224,7 +194,7 @@ DataFrame<I, H>::load_data (IndexVecType &&indices, Ts&& ... args)  {
     // const size_type tuple_size =
     //     std::tuple_size<decltype(args_tuple)>::value;
     auto        fc = [this, &cnt](auto &pa) mutable -> void {
-                         cnt += this->load_pair_(pa, false);
+		                 cnt += this->load_pair_(pa, false);
                      };
 
     const SpinGuard guard(lock_);
@@ -385,7 +355,7 @@ load_column (const char *name,
     size_type       s = std::distance(range.begin, range.end);
     const size_type idx_s = indices_.size();
 
-    if (s > idx_s) [[unlikely]]  {
+    if (s > idx_s)  {
         char buffer [512];
 
         snprintf (buffer, sizeof(buffer) - 1,
@@ -405,7 +375,7 @@ load_column (const char *name,
     StlVecType<value_t> *vec_ptr = nullptr;
     SpinGuard           guard(do_lock ? lock_ : nullptr);
 
-    if (iter == column_tb_.end()) [[likely]]
+    if (iter == column_tb_.end())
         vec_ptr = &(create_column<value_t>(name, false));
     else  {
         DataVec &hv = data_[iter->second];
@@ -433,18 +403,16 @@ load_column (const char *name,
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<has_result V>
+template<typename V>
 typename DataFrame<I, H>::size_type
 DataFrame<I, H>::
-load_result_as_column(V &visitor,
-                      const char *new_col_name,
-                      nan_policy padding)  {
+load_result_as_column(V &visitor, const char *name, nan_policy padding)  {
 
     const size_type idx_s = indices_.size();
     auto            &new_col = visitor.get_result();
     const size_type data_s = new_col.size();
 
-    if (data_s > idx_s) [[unlikely]]  {
+    if (data_s > idx_s)  {
         char buffer [512];
 
         snprintf (buffer, sizeof(buffer) - 1,
@@ -462,19 +430,18 @@ load_result_as_column(V &visitor,
 
     size_type   ret_cnt = data_s;
 
-    if (padding == nan_policy::pad_with_nans && data_s < idx_s)  {
+    if (padding == nan_policy::pad_with_nans && data_s < idx_s)
         for (size_type i = 0; i < idx_s - data_s; ++i)  {
             new_col.push_back (std::move(get_nan<new_type>()));
             ret_cnt += 1;
         }
-    }
 
-    const auto              iter = column_tb_.find (new_col_name);
+    const auto              iter = column_tb_.find (name);
     StlVecType<new_type>    *vec_ptr = nullptr;
     SpinGuard               guard(lock_);
 
     if (iter == column_tb_.end())
-        vec_ptr = &(create_column<new_type>(new_col_name, false));
+        vec_ptr = &(create_column<new_type>(name, false));
     else  {
         DataVec &hv = data_[iter->second];
 
@@ -489,90 +456,17 @@ load_result_as_column(V &visitor,
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename T, has_result V>
-typename DataFrame<I, H>::size_type
-DataFrame<I, H>::
-load_result_as_column(const char *col_name,
-                      V &&visitor,
-                      const char *new_col_name,
-                      nan_policy padding)  {
-
-    V   vis = std::move(visitor);
-
-    single_act_visit<T, V>(col_name, vis);
-    return (load_result_as_column<V>(vis, new_col_name, padding));
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T1, typename T2, has_result V>
-typename DataFrame<I, H>::size_type
-DataFrame<I, H>::
-load_result_as_column(const char *col_name1,
-                      const char *col_name2,
-                      V &&visitor,
-                      const char *new_col_name,
-                      nan_policy padding)  {
-
-    V   vis = std::move(visitor);
-
-    single_act_visit<T1, T2, V>(col_name1, col_name2, vis);
-    return (load_result_as_column<V>(vis, new_col_name, padding));
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T1, typename T2, typename T3, has_result V>
-typename DataFrame<I, H>::size_type
-DataFrame<I, H>::
-load_result_as_column(const char *col_name1,
-                      const char *col_name2,
-                      const char *col_name3,
-                      V &&visitor,
-                      const char *new_col_name,
-                      nan_policy padding)  {
-
-    V   vis = std::move(visitor);
-
-    single_act_visit<T1, T2, T3, V>(col_name1, col_name2, col_name3, vis);
-    return (load_result_as_column<V>(vis, new_col_name, padding));
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename T1, typename T2, typename T3, typename T4, has_result V>
-typename DataFrame<I, H>::size_type
-DataFrame<I, H>::
-load_result_as_column(const char *col_name1,
-                      const char *col_name2,
-                      const char *col_name3,
-                      const char *col_name4,
-                      V &&visitor,
-                      const char *new_col_name,
-                      nan_policy padding)  {
-
-    V   vis = std::move(visitor);
-
-    single_act_visit<T1, T2, T3, T4, V>(col_name1,
-                                        col_name2,
-                                        col_name3,
-                                        col_name4,
-                                        vis);
-    return (load_result_as_column<V>(vis, new_col_name, padding));
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<hashable_stringable T, typename IT>
+template<typename T, typename IT>
 typename DataFrame<I, H>::size_type
 DataFrame<I, H>::
 load_indicators(const char *cat_col_name, const char *numeric_cols_prefix)  {
 
-    using map_t = DFUnorderedMap<T, StlVecType<IT> *>;
+    using map_t = std::unordered_map<
+        T, StlVecType<IT> *,
+        std::hash<T>,
+        std::equal_to<T>,
+        typename allocator_declare<
+            std::pair<const T, StlVecType<IT> *>, align_value>::type>;
 
     const SpinGuard guard(lock_);
     const auto      &cat_col = get_column<T>(cat_col_name, false);
@@ -581,7 +475,7 @@ load_indicators(const char *cat_col_name, const char *numeric_cols_prefix)  {
     size_type       ret_cnt = 0;
 
     val_map.reserve(col_s / 2);
-    for (size_type i = 0; i < col_s; ++i) [[likely]]  {
+    for (size_type i = 0; i < col_s; ++i)  {
         const auto  val = cat_col[i];
         auto        in_ret = val_map.emplace(std::make_pair(val, nullptr));
 
@@ -611,31 +505,29 @@ typename DataFrame<I, H>::size_type
 DataFrame<I, H>::
 from_indicators(const StlVecType<const char *> &ind_col_names,
                 const char *cat_col_name,
-                const char *numeric_cols_prefix)  {
+                const char *numeric_cols_prefixg)  {
 
     const size_type                     ind_col_s = ind_col_names.size();
     StlVecType<const StlVecType<T> *>   ind_cols(ind_col_s, nullptr);
     SpinGuard                           guard (lock_);
 
-    for (size_type i = 0; i < ind_col_s; ++i) [[likely]]
+    for (size_type i = 0; i < ind_col_s; ++i)
         ind_cols[i] = &(get_column<T>(ind_col_names[i], false));
 
     const size_type col_s = ind_cols[0]->size();
     auto            &new_col = create_column<CT>(cat_col_name, false);
     const size_type pre_offset =
-        numeric_cols_prefix == nullptr ? 0 : strlen(numeric_cols_prefix);
+        numeric_cols_prefixg == nullptr ? 0 : strlen(numeric_cols_prefixg);
 
     guard.release();
     new_col.reserve(col_s);
-    for (size_type i = 0; i < col_s; ++i) [[likely]]  {
-        for (size_type j = 0; j < ind_col_s; ++j) [[likely]]  {
+    for (size_type i = 0; i < col_s; ++i)
+        for (size_type j = 0; j < ind_col_s; ++j)
             if (ind_cols[j]->at(i))  {
                 new_col.push_back(
                     _string_to_<CT>(ind_col_names[j] + pre_offset));
                 break;
             }
-        }
-    }
 
     return (col_s);
 }
@@ -682,7 +574,7 @@ load_column (const char *name,
     const size_type idx_s = indices_.size();
     const size_type data_s = column.size();
 
-    if (data_s > idx_s) [[unlikely]]  {
+    if (data_s > idx_s)  {
         char buffer [512];
 
         snprintf (buffer, sizeof(buffer) - 1,
@@ -711,7 +603,7 @@ load_column (const char *name,
     StlVecType<value_t> *vec_ptr = nullptr;
     const SpinGuard     guard (do_lock ? lock_ : nullptr);
 
-    if (iter == column_tb_.end()) [[likely]]
+    if (iter == column_tb_.end())
         vec_ptr = &(create_column<value_t>(name, false));
     else  {
         DataVec &hv = data_[iter->second];
@@ -805,6 +697,21 @@ load_column (const char *name,
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
+template<typename T1, typename T2>
+typename DataFrame<I, H>::size_type
+DataFrame<I, H>::
+load_pair_(std::pair<T1, T2> &col_name_data, bool do_lock)  {
+
+    return (load_column<typename decltype(col_name_data.second)::value_type>(
+                col_name_data.first, // column name
+                std::forward<T2>(col_name_data.second),
+                nan_policy::pad_with_nans,
+                do_lock));
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
 template<typename ITR>
 typename DataFrame<I, H>::size_type
 DataFrame<I, H>::
@@ -819,7 +726,7 @@ append_column (const char *name,
         std::distance(range.begin, range.end) + vec.size();
     const size_type        idx_s = indices_.size();
 
-    if (s > idx_s) [[unlikely]]  {
+    if (s > idx_s)  {
         char buffer [512];
 
         snprintf(buffer, sizeof(buffer) - 1,
@@ -860,7 +767,7 @@ append_column (const char *name, const T &val, nan_policy padding)  {
     size_type           s = 1;
     const size_type     idx_s = indices_.size();
 
-    if (s > idx_s) [[unlikely]]  {
+    if (s > idx_s)  {
         char buffer [512];
 
         snprintf(buffer, sizeof(buffer) - 1,
@@ -887,6 +794,18 @@ append_column (const char *name, const T &val, nan_policy padding)  {
     }
 
     return (ret_cnt);
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<typename T>
+typename DataFrame<I, H>::size_type
+DataFrame<I, H>::append_row_(std::pair<const char *, T> &row_name_data)  {
+
+    return (append_column<T>(row_name_data.first, // column name
+                             std::forward<T>(row_name_data.second),
+                             nan_policy::dont_pad_with_nans));
 }
 
 // ----------------------------------------------------------------------------
@@ -928,7 +847,7 @@ void DataFrame<I, H>::remove_data_by_idx (Index2D<IndexType> range)  {
     const auto  &upper =
         std::upper_bound (indices_.begin(), indices_.end(), range.end);
 
-    if (lower != indices_.end()) [[likely]]  {
+    if (lower != indices_.end())  {
         const size_type b_dist = std::distance(indices_.begin(), lower);
         const size_type e_dist = std::distance(indices_.begin(),
                                                upper < indices_.end()
@@ -937,33 +856,11 @@ void DataFrame<I, H>::remove_data_by_idx (Index2D<IndexType> range)  {
         make_consistent<Ts ...>();
         indices_.erase(lower, upper);
 
-        const auto      thread_level =
-            (indices_.size() < ThreadPool::MUL_THR_THHOLD)
-                ? 0L : get_thread_level();
-        const SpinGuard guard(lock_);
+        remove_functor_<Ts ...> functor (b_dist, e_dist);
+        const SpinGuard         guard(lock_);
 
-        if (thread_level > 2)  {
-            auto    lbd =
-                [b_dist, e_dist, this]
-                (const auto &begin, const auto &end) -> void  {
-                    remove_functor_<Ts ...> functor (b_dist, e_dist);
-
-                    for (auto citer = begin; citer < end; ++citer)
-                        this->data_[citer->second].change(functor);
-                };
-            auto    futures =
-                thr_pool_.parallel_loop(column_list_.begin(),
-                                        column_list_.end(),
-                                        std::move(lbd));
-
-            for (auto &fut : futures)  fut.get();
-        }
-        else  {
-            remove_functor_<Ts ...> functor (b_dist, e_dist);
-
-            for (const auto &citer : column_list_)
-                data_[citer.second].change(functor);
-        }
+        for (const auto &iter : column_list_)
+            data_[iter.second].change(functor);
     }
 
     return;
@@ -984,40 +881,18 @@ void DataFrame<I, H>::remove_data_by_loc (Index2D<long> range)  {
         range.end = static_cast<long>(indices_.size()) + range.end;
 
     if (range.end <= static_cast<long>(indices_.size()) &&
-        range.begin <= range.end && range.begin >= 0) [[likely]]  {
+        range.begin <= range.end && range.begin >= 0)  {
         make_consistent<Ts ...>();
         indices_.erase(indices_.begin() + range.begin,
                        indices_.begin() + range.end);
 
-        const auto      thread_level =
-            (indices_.size() < ThreadPool::MUL_THR_THHOLD)
-                ? 0L : get_thread_level();
-        const SpinGuard guard(lock_);
+        remove_functor_<Ts ...> functor (
+            static_cast<size_type>(range.begin),
+            static_cast<size_type>(range.end));
+        const SpinGuard         guard(lock_);
 
-        if (thread_level > 2)  {
-            auto    lbd =
-                [&range = std::as_const(range), this]
-                (const auto &begin, const auto &end) -> void  {
-                    remove_functor_<Ts ...> functor (size_type(range.begin),
-                                                     size_type(range.end));
-
-                    for (auto citer = begin; citer < end; ++citer)
-                        this->data_[citer->second].change(functor);
-                };
-            auto    futures =
-                thr_pool_.parallel_loop(column_list_.begin(),
-                                        column_list_.end(),
-                                        std::move(lbd));
-
-            for (auto &fut : futures)  fut.get();
-        }
-        else  {
-            remove_functor_<Ts ...> functor (size_type(range.begin),
-                                             size_type(range.end));
-
-            for (const auto &citer : column_list_) [[likely]]
-                data_[citer.second].change(functor);
-        }
+        for (const auto &iter : column_list_)
+            data_[iter.second].change(functor);
 
         return;
     }
@@ -1038,18 +913,30 @@ template<typename T, typename F, typename ... Ts>
 void DataFrame<I, H>::remove_data_by_sel (const char *name, F &sel_functor)  {
 
     static_assert(std::is_base_of<HeteroVector<align_value>, H>::value,
-                  "Only a StdDataFrame can call remove_data_by_sel()");
+                  "Only a StdDataFrame can call remove_data_by_loc()");
 
     const ColumnVecType<T>  &vec = get_column<T>(name);
     const size_type         col_s = vec.size();
     StlVecType<size_type>   col_indices;
 
     col_indices.reserve(indices_.size() / 2);
-    for (size_type i = 0; i < col_s; ++i) [[likely]]
+    for (size_type i = 0; i < col_s; ++i)
         if (sel_functor (indices_[i], vec[i]))
             col_indices.push_back(i);
 
-    remove_data_by_sel_common_<Ts ...>(col_indices);
+    const sel_remove_functor_<Ts ...>   functor (col_indices);
+    SpinGuard                           guard (lock_);
+
+    for (const auto &col_citer : column_list_)
+        data_[col_citer.second].change(functor);
+    guard.release();
+
+    const size_type col_indices_s = col_indices.size();
+    size_type       del_count = 0;
+
+    for (size_type i = 0; i < col_indices_s; ++i)
+        indices_.erase(indices_.begin() + (col_indices[i] - del_count++));
+
     return;
 }
 
@@ -1059,9 +946,6 @@ template<typename I, typename H>
 template<typename T1, typename T2, typename F, typename ... Ts>
 void DataFrame<I, H>::
 remove_data_by_sel (const char *name1, const char *name2, F &sel_functor)  {
-
-    static_assert(std::is_base_of<HeteroVector<align_value>, H>::value,
-                  "Only a StdDataFrame can call remove_data_by_sel()");
 
     SpinGuard               guard (lock_);
     const ColumnVecType<T1> &vec1 = get_column<T1>(name1, false);
@@ -1073,7 +957,7 @@ remove_data_by_sel (const char *name1, const char *name2, F &sel_functor)  {
     StlVecType<size_type>   col_indices;
 
     col_indices.reserve(idx_s / 2);
-    for (size_type i = 0; i < min_col_s; ++i) [[likely]]
+    for (size_type i = 0; i < min_col_s; ++i)
         if (sel_functor (indices_[i], vec1[i], vec2[i]))
             col_indices.push_back(i);
     for (size_type i = min_col_s; i < idx_s; ++i)
@@ -1082,7 +966,18 @@ remove_data_by_sel (const char *name1, const char *name2, F &sel_functor)  {
                          i < col_s2 ? vec2[i] : get_nan<T2>()))
             col_indices.push_back(i);
 
-    remove_data_by_sel_common_<Ts ...>(col_indices);
+    const sel_remove_functor_<Ts ...>   functor (col_indices);
+
+    for (const auto &col_citer : column_list_)
+        data_[col_citer.second].change(functor);
+    guard.release();
+
+    const size_type col_indices_s = col_indices.size();
+    size_type       del_count = 0;
+
+    for (size_type i = 0; i < col_indices_s; ++i)
+        indices_.erase(indices_.begin() + (col_indices[i] - del_count++));
+
     return;
 }
 
@@ -1096,9 +991,6 @@ remove_data_by_sel (const char *name1,
                     const char *name3,
                     F &sel_functor)  {
 
-    static_assert(std::is_base_of<HeteroVector<align_value>, H>::value,
-                  "Only a StdDataFrame can call remove_data_by_sel()");
-
     SpinGuard               guard (lock_);
     const ColumnVecType<T1> &vec1 = get_column<T1>(name1, false);
     const ColumnVecType<T2> &vec2 = get_column<T2>(name2, false);
@@ -1111,7 +1003,7 @@ remove_data_by_sel (const char *name1,
     StlVecType<size_type>   col_indices;
 
     col_indices.reserve(idx_s / 2);
-    for (size_type i = 0; i < min_col_s; ++i) [[likely]]
+    for (size_type i = 0; i < min_col_s; ++i)
         if (sel_functor (indices_[i], vec1[i], vec2[i], vec3[i]))
             col_indices.push_back(i);
     for (size_type i = min_col_s; i < idx_s; ++i)
@@ -1121,106 +1013,88 @@ remove_data_by_sel (const char *name1,
                          i < col_s3 ? vec3[i] : get_nan<T3>()))
             col_indices.push_back(i);
 
-    remove_data_by_sel_common_<Ts ...>(col_indices);
+    const sel_remove_functor_<Ts ...>   functor (col_indices);
+
+    for (const auto &col_citer : column_list_)
+        data_[col_citer.second].change(functor);
+    guard.release();
+
+    const size_type col_indices_s = col_indices.size();
+    size_type       del_count = 0;
+
+    for (size_type i = 0; i < col_indices_s; ++i)
+        indices_.erase(indices_.begin() + (col_indices[i] - del_count++));
+
     return;
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<StringOnly T, typename ... Ts>
-void DataFrame<I, H>::
-remove_data_by_like (const char *name,
-                     const char *pattern,
-                     bool case_insensitive,
-                     char esc_char)  {
+template<typename MAP, typename ... Ts>
+DataFrame<I, H> DataFrame<I, H>::
+remove_dups_common_(const DataFrame &s_df,
+                    remove_dup_spec rds,
+                    const MAP &row_table,
+                    const IndexVecType &index)  {
 
-    static_assert(std::is_base_of<HeteroVector<align_value>, H>::value,
-                  "Only a StdDataFrame can call remove_data_by_like()");
+    using count_vec = StlVecType<size_type>;
 
-    const ColumnVecType<T>  &vec = get_column<T>(name);
-    const size_type         col_s = vec.size();
-    StlVecType<size_type>   col_indices;
+    count_vec   rows_to_del;
 
-    col_indices.reserve(indices_.size() / 2);
-    for (size_type i = 0; i < col_s; ++i) [[likely]]  {
-        if constexpr (std::is_same_v<T, std::string> ||
-                      std::is_same_v<T, VirtualString>)  {
-            if (_like_clause_compare_(pattern,
-                                      vec[i].c_str(),
-                                      case_insensitive,
-                                      esc_char))
-                col_indices.push_back(i);
+    rows_to_del.reserve(8);
+    if (rds == remove_dup_spec::keep_first)  {
+        for (const auto &citer : row_table)  {
+            if (citer.second.size() > 1)  {
+                for (size_type i = 1; i < citer.second.size(); ++i)
+                    rows_to_del.push_back(citer.second[i]);
+            }
         }
-        else  {
-            if (_like_clause_compare_(pattern,
-                                      vec[i],
-                                      case_insensitive,
-                                      esc_char))
-                col_indices.push_back(i);
+    }
+    else if (rds == remove_dup_spec::keep_last)  {
+        for (const auto &citer : row_table)  {
+            if (citer.second.size() > 1)  {
+                for (size_type i = 0; i < citer.second.size() - 1; ++i)
+                    rows_to_del.push_back(citer.second[i]);
+            }
+        }
+    }
+    else  {  // remove_dup_spec::keep_none
+        for (const auto &citer : row_table)  {
+            if (citer.second.size() > 1)  {
+                for (size_type i = 0; i < citer.second.size(); ++i)
+                    rows_to_del.push_back(citer.second[i]);
+            }
         }
     }
 
-    remove_data_by_sel_common_<Ts ...>(col_indices);
-    return;
-}
+    DataFrame<I, H> new_df;
+    IndexVecType    new_index (index.size() - rows_to_del.size());
 
-// ----------------------------------------------------------------------------
+    _remove_copy_if_(index.begin(), index.end(), new_index.begin(),
+                     [&rows_to_del] (std::size_t n) -> bool  {
+                         return (std::find(rows_to_del.begin(),
+                                           rows_to_del.end(),
+                                           n) != rows_to_del.end());
+                     });
+    new_df.load_index(std::move(new_index));
 
-template<typename I, typename H>
-template<StringOnly T, typename ... Ts>
-void DataFrame<I, H>::
-remove_data_by_like(const char *name1,
-                    const char *name2,
-                    const char *pattern1,
-                    const char *pattern2,
-                    bool case_insensitive,
-                    char esc_char)  {
+    const SpinGuard guard(lock_);
 
-    static_assert(std::is_base_of<HeteroVector<align_value>, H>::value,
-                  "Only a StdDataFrame can call remove_data_by_like()");
+    for (const auto &citer : s_df.column_list_)  {
+        copy_remove_functor_<Ts ...>    functor (citer.first.c_str(),
+                                                 rows_to_del,
+                                                 new_df);
 
-    SpinGuard               guard (lock_);
-    const ColumnVecType<T>  &vec1 = get_column<T>(name1, false);
-    const ColumnVecType<T>  &vec2 = get_column<T>(name2, false);
-    const size_type         min_col_s = std::min(vec1.size(), vec2.size());
-    StlVecType<size_type>   col_indices;
-
-    col_indices.reserve(min_col_s / 2);
-    for (size_type i = 0; i < min_col_s; ++i) [[likely]]  {
-        if constexpr (std::is_same_v<T, std::string> ||
-                      std::is_same_v<T, VirtualString>)  {
-            if (_like_clause_compare_(pattern1,
-                                      vec1[i].c_str(),
-                                      case_insensitive,
-                                      esc_char) &&
-                _like_clause_compare_(pattern2,
-                                      vec2[i].c_str(),
-                                      case_insensitive,
-                                      esc_char))
-                col_indices.push_back(i);
-        }
-        else  {
-            if (_like_clause_compare_(pattern1,
-                                      vec1[i],
-                                      case_insensitive,
-                                      esc_char) &&
-                _like_clause_compare_(pattern2,
-                                      vec2[i],
-                                      case_insensitive,
-                                      esc_char))
-                col_indices.push_back(i);
-        }
+        s_df.data_[citer.second].change(functor);
     }
-
-    remove_data_by_sel_common_<Ts ...>(col_indices);
-    return;
+    return (new_df);
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<hashable_equal T, typename ... Ts>
+template<typename T, typename ... Ts>
 DataFrame<I, H> DataFrame<I, H>::
 remove_duplicates (const char *name,
                    bool include_index,
@@ -1228,7 +1102,12 @@ remove_duplicates (const char *name,
 
     using data_tuple = std::tuple<const T &, const IndexType &>;
     using count_vec = StlVecType<size_type>;
-    using map_t = DFUnorderedMap<data_tuple, count_vec, TupleHash>;
+    using map_t = std::unordered_map<
+        data_tuple, count_vec,
+        TupleHash,
+        std::equal_to<data_tuple>,
+        typename allocator_declare<
+            std::pair<const data_tuple, count_vec>, align_value>::type>;
 
     const ColumnVecType<T>  &vec = get_column<T>(name);
     const auto              &index = get_index();
@@ -1237,8 +1116,8 @@ remove_duplicates (const char *name,
     count_vec               dummy_vec;
     const IndexType         dummy_idx { };
 
-    for (size_type i = 0; i < col_s; ++i) [[likely]]  {
-        const auto  insert_res =
+    for (size_type i = 0; i < col_s; ++i)  {
+        auto    insert_res =
             row_table.emplace(
                 std::forward_as_tuple(vec[i],
                                       include_index ? index[i] : dummy_idx),
@@ -1255,7 +1134,7 @@ remove_duplicates (const char *name,
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<hashable_equal T1, hashable_equal T2, typename ... Ts>
+template<typename T1, typename T2, typename ... Ts>
 DataFrame<I, H> DataFrame<I, H>::
 remove_duplicates (const char *name1,
                    const char *name2,
@@ -1264,7 +1143,12 @@ remove_duplicates (const char *name1,
 
     using data_tuple = std::tuple<const T1 &, const T2 &, const IndexType &>;
     using count_vec = StlVecType<size_type>;
-    using map_t = DFUnorderedMap<data_tuple, count_vec, TupleHash>;
+    using map_t = std::unordered_map<
+        data_tuple, count_vec,
+        TupleHash,
+        std::equal_to<data_tuple>,
+        typename allocator_declare<
+            std::pair<const data_tuple, count_vec>, align_value>::type>;
 
     SpinGuard               guard (lock_);
     const ColumnVecType<T1> &vec1 = get_column<T1>(name1, false);
@@ -1272,15 +1156,15 @@ remove_duplicates (const char *name1,
 
     guard.release();
 
-    const auto      &index = get_index();
-    const size_type col_s =
+    const auto              &index = get_index();
+    const size_type         col_s =
         std::min<size_type>({ vec1.size(), vec2.size(), index.size() });
-    map_t           row_table;
-    count_vec       dummy_vec;
-    const IndexType dummy_idx { };
+    map_t                   row_table;
+    count_vec               dummy_vec;
+    const IndexType         dummy_idx { };
 
-    for (size_type i = 0; i < col_s; ++i) [[likely]]  {
-        const auto  insert_res =
+    for (size_type i = 0; i < col_s; ++i)  {
+        auto    insert_res =
             row_table.emplace(
                 std::forward_as_tuple(vec1[i], vec2[i],
                                       include_index ? index[i] : dummy_idx),
@@ -1297,8 +1181,7 @@ remove_duplicates (const char *name1,
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<hashable_equal T1, hashable_equal T2, hashable_equal T3,
-         typename ... Ts>
+template<typename T1, typename T2, typename T3, typename ... Ts>
 DataFrame<I, H> DataFrame<I, H>::
 remove_duplicates (const char *name1,
                    const char *name2,
@@ -1306,10 +1189,16 @@ remove_duplicates (const char *name1,
                    bool include_index,
                    remove_dup_spec rds) const  {
 
-    using data_tuple =
-        std::tuple<const T1 &, const T2 &, const T3 &, const IndexType &>;
+    using data_tuple = std::tuple<const T1 &, const T2 &, const T3 &,
+                                  const IndexType &>;
     using count_vec = StlVecType<size_type>;
-    using map_t = DFUnorderedMap<data_tuple, count_vec, TupleHash>;
+    using map_t = std::unordered_map<
+        data_tuple, count_vec,
+        TupleHash,
+        std::equal_to<data_tuple>,
+        typename allocator_declare<
+            std::pair<const data_tuple, count_vec>, align_value>::type>;
+
 
     SpinGuard               guard (lock_);
     const ColumnVecType<T1> &vec1 = get_column<T1>(name1, false);
@@ -1322,12 +1211,12 @@ remove_duplicates (const char *name1,
     const size_type col_s =
         std::min<size_type>(
             { vec1.size(), vec2.size(), vec3.size(), index.size() });
-    map_t           row_table;
-    count_vec       dummy_vec;
-    const IndexType dummy_idx { };
+    map_t                   row_table;
+    count_vec               dummy_vec;
+    const IndexType         dummy_idx { };
 
-    for (size_type i = 0; i < col_s; ++i) [[likely]]  {
-        const auto  insert_res =
+    for (size_type i = 0; i < col_s; ++i)  {
+        auto    insert_res =
             row_table.emplace(
                 std::forward_as_tuple(vec1[i], vec2[i], vec3[i],
                                       include_index ? index[i] : dummy_idx),
@@ -1344,9 +1233,7 @@ remove_duplicates (const char *name1,
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<hashable_equal T1, hashable_equal T2, hashable_equal T3,
-         hashable_equal T4,
-         typename ... Ts>
+template<typename T1, typename T2, typename T3, typename T4, typename ... Ts>
 DataFrame<I, H> DataFrame<I, H>::
 remove_duplicates (const char *name1,
                    const char *name2,
@@ -1359,7 +1246,13 @@ remove_duplicates (const char *name1,
                                   const T3 &, const T4 &,
                                   const IndexType &>;
     using count_vec = StlVecType<size_type>;
-    using map_t = DFUnorderedMap<data_tuple, count_vec, TupleHash>;
+    using map_t = std::unordered_map<
+        data_tuple, count_vec,
+        TupleHash,
+        std::equal_to<data_tuple>,
+        typename allocator_declare<
+            std::pair<const data_tuple, count_vec>, align_value>::type>;
+
 
     SpinGuard               guard (lock_);
     const ColumnVecType<T1> &vec1 = get_column<T1>(name1, false);
@@ -1374,12 +1267,12 @@ remove_duplicates (const char *name1,
         std::min<size_type>(
             { vec1.size(), vec2.size(), vec3.size(), vec4.size(),
               index.size() });
-    map_t           row_table;
-    count_vec       dummy_vec;
-    const IndexType dummy_idx { };
+    map_t                   row_table;
+    count_vec               dummy_vec;
+    const IndexType         dummy_idx { };
 
-    for (size_type i = 0; i < col_s; ++i) [[likely]]  {
-        const auto  insert_res =
+    for (size_type i = 0; i < col_s; ++i)  {
+        auto    insert_res =
             row_table.emplace(
                 std::forward_as_tuple(vec1[i], vec2[i], vec3[i], vec4[i],
                                       include_index ? index[i] : dummy_idx),
@@ -1396,8 +1289,7 @@ remove_duplicates (const char *name1,
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<hashable_equal T1, hashable_equal T2, hashable_equal T3,
-         hashable_equal T4, hashable_equal T5,
+template<typename T1, typename T2, typename T3, typename T4, typename T5,
          typename ... Ts>
 DataFrame<I, H> DataFrame<I, H>::
 remove_duplicates (const char *name1,
@@ -1412,7 +1304,13 @@ remove_duplicates (const char *name1,
                                   const T3 &, const T4 &, const T5 &,
                                   const IndexType &>;
     using count_vec = StlVecType<size_type>;
-    using map_t = DFUnorderedMap<data_tuple, count_vec, TupleHash>;
+    using map_t = std::unordered_map<
+        data_tuple, count_vec,
+        TupleHash,
+        std::equal_to<data_tuple>,
+        typename allocator_declare<
+            std::pair<const data_tuple, count_vec>, align_value>::type>;
+
 
     SpinGuard               guard (lock_);
     const ColumnVecType<T1> &vec1 = get_column<T1>(name1, false);
@@ -1428,12 +1326,12 @@ remove_duplicates (const char *name1,
         std::min<size_type>(
             { vec1.size(), vec2.size(), vec3.size(), vec4.size(), vec5.size(),
               index.size() });
-    map_t           row_table;
-    count_vec       dummy_vec;
-    const IndexType dummy_idx { };
+    map_t                   row_table;
+    count_vec               dummy_vec;
+    const IndexType         dummy_idx { };
 
-    for (size_type i = 0; i < col_s; ++i) [[likely]]  {
-        const auto  insert_res =
+    for (size_type i = 0; i < col_s; ++i)  {
+        auto    insert_res =
             row_table.emplace(
                 std::forward_as_tuple(vec1[i], vec2[i], vec3[i],
                                       vec4[i], vec5[i],
@@ -1451,8 +1349,8 @@ remove_duplicates (const char *name1,
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<hashable_equal T1, hashable_equal T2, hashable_equal T3,
-         hashable_equal T4, hashable_equal T5, hashable_equal T6,
+template<typename T1, typename T2, typename T3, typename T4,
+         typename T5, typename T6,
          typename ... Ts>
 DataFrame<I, H> DataFrame<I, H>::
 remove_duplicates (const char *name1,
@@ -1469,7 +1367,13 @@ remove_duplicates (const char *name1,
                                   const T5 &, const T6 &,
                                   const IndexType &>;
     using count_vec = StlVecType<size_type>;
-    using map_t = DFUnorderedMap<data_tuple, count_vec, TupleHash>;
+    using map_t = std::unordered_map<
+        data_tuple, count_vec,
+        TupleHash,
+        std::equal_to<data_tuple>,
+        typename allocator_declare<
+            std::pair<const data_tuple, count_vec>, align_value>::type>;
+
 
     SpinGuard               guard (lock_);
     const ColumnVecType<T1> &vec1 = get_column<T1>(name1, false);
@@ -1487,12 +1391,12 @@ remove_duplicates (const char *name1,
             { vec1.size(), vec2.size(), vec3.size(), vec4.size(),
               vec5.size(), vec6.size(),
               index.size() });
-    map_t           row_table;
-    count_vec       dummy_vec;
-    const IndexType dummy_idx { };
+    map_t                   row_table;
+    count_vec               dummy_vec;
+    const IndexType         dummy_idx { };
 
-    for (size_type i = 0; i < col_s; ++i) [[likely]]  {
-        const auto  insert_res =
+    for (size_type i = 0; i < col_s; ++i)  {
+        auto    insert_res =
             row_table.emplace(
                 std::forward_as_tuple(vec1[i], vec2[i], vec3[i],
                                       vec4[i], vec5[i], vec6[i],
@@ -1535,8 +1439,8 @@ consolidate(const char *old_col_name1,
                        false);
     guard.release();
     if (delete_old_cols)  {
-        remove_column<OLD_T1>(old_col_name1);
-        remove_column<OLD_T2>(old_col_name2);
+        remove_column(old_col_name1);
+        remove_column(old_col_name2);
     }
     return;
 }
@@ -1574,9 +1478,9 @@ consolidate(const char *old_col_name1,
                        false);
     guard.release();
     if (delete_old_cols)  {
-        remove_column<OLD_T1>(old_col_name1);
-        remove_column<OLD_T2>(old_col_name2);
-        remove_column<OLD_T3>(old_col_name3);
+        remove_column(old_col_name1);
+        remove_column(old_col_name2);
+        remove_column(old_col_name3);
     }
     return;
 }
@@ -1618,10 +1522,10 @@ consolidate(const char *old_col_name1,
                        false);
     guard.release();
     if (delete_old_cols)  {
-        remove_column<OLD_T1>(old_col_name1);
-        remove_column<OLD_T2>(old_col_name2);
-        remove_column<OLD_T3>(old_col_name3);
-        remove_column<OLD_T4>(old_col_name4);
+        remove_column(old_col_name1);
+        remove_column(old_col_name2);
+        remove_column(old_col_name3);
+        remove_column(old_col_name4);
     }
     return;
 }
@@ -1668,11 +1572,11 @@ consolidate(const char *old_col_name1,
                        false);
     guard.release();
     if (delete_old_cols)  {
-        remove_column<OLD_T1>(old_col_name1);
-        remove_column<OLD_T2>(old_col_name2);
-        remove_column<OLD_T3>(old_col_name3);
-        remove_column<OLD_T4>(old_col_name4);
-        remove_column<OLD_T5>(old_col_name5);
+        remove_column(old_col_name1);
+        remove_column(old_col_name2);
+        remove_column(old_col_name3);
+        remove_column(old_col_name4);
+        remove_column(old_col_name5);
     }
     return;
 }

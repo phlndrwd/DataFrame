@@ -8,14 +8,13 @@ BUILD_DEFINE = Linux_GCC64
 
 CXX = /usr/bin/g++
 
-# INCLUDES = -I/usr/include/c++/7 -I/usr/include
-INCLUDES =
+INCLUDES = -I/usr/include/c++/7 -I/usr/include
 
 LFLAGS =
-CXXFLAGS = -g $(INCLUDES) $(DEFINES) -D_GLIBCXX_DEBUG -pedantic -Wall -Wextra -std=c++2b
-# CXXFLAGS = -g $(INCLUDES) $(DEFINES) -std=c++2b
+CXXFLAGS = -g $(INCLUDES) $(DEFINES) -D_GLIBCXX_DEBUG -pedantic -Wall -Wextra -std=c++17
+# CXXFLAGS = -g $(INCLUDES) $(DEFINES) -std=c++17
 
-PLATFORM_LIBS = -lpthread -ldl -lm -lstdc++ -fsanitize-address-use-after-scope -fsanitize=address
+PLATFORM_LIBS = -lpthread -ldl -lm -lstdc++
 
 # -----------------------------------------------------------------------------
 

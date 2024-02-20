@@ -29,81 +29,54 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <DataFrame/DataFrameStatsVisitors.h>
 #include <DataFrame/RandGen.h>
 
-#include <chrono>
 #include <iostream>
 
 using namespace hmdf;
-using namespace std::chrono;
 
-constexpr std::size_t   ALIGNMENT = 64;
-constexpr std::size_t   SIZE = 300000000;
-// constexpr std::size_t   SIZE = 10000000;
+constexpr std::size_t   ALIGNMENT = 256;
 
-typedef StdDataFrame64<time_t> MyDataFrame;
+typedef StdDataFrame256<time_t> MyDataFrame;
 
 // -----------------------------------------------------------------------------
 
 int main(int, char *[]) {
 
-    MyDataFrame::set_optimum_thread_level();
-	
-    const auto  first = high_resolution_clock::now();
+    std::cout << "Starting ... " << std::endl;
+
+    const auto  first = time(nullptr);
+    auto        index_vec =
+        MyDataFrame::gen_datetime_index("01/01/2010", "08/15/2019",
+                                        time_frequency::secondly, 1);
+    const auto  index_sz = index_vec.size();
     MyDataFrame df;
 
     df.load_data(
-        MyDataFrame::gen_sequence_index(0, SIZE, 1),
-        std::make_pair("normal", gen_normal_dist<double, ALIGNMENT>(SIZE)),
-        std::make_pair("log_normal", gen_lognormal_dist<double, ALIGNMENT>(SIZE)),
-        std::make_pair("exponential", gen_exponential_dist<double, ALIGNMENT>(SIZE)));
+        std::move(index_vec),
+        std::make_pair("normal", gen_normal_dist<double, ALIGNMENT>(index_sz)),
+        std::make_pair("log_normal", gen_lognormal_dist<double, ALIGNMENT>(index_sz)),
+        std::make_pair("exponential", gen_exponential_dist<double, ALIGNMENT>(index_sz)));
 
-    const auto  second = high_resolution_clock::now();
+    const auto  second = time(nullptr);
 
-    std::cout << "Data generation/load time: "
-              << double(duration_cast<microseconds>(second - first).count()) / 1000000.0
-              << " secs" << std::endl;
+    std::cout << "All data loadings are done. Calculating means ... "
+              << second - first << std::endl;
 
     MeanVisitor<double, time_t> n_mv;
-    VarVisitor<double, time_t>  ln_vv;
-    CorrVisitor<double, time_t> e_ln_cv;
+    MeanVisitor<double, time_t> ln_mv;
+    MeanVisitor<double, time_t> e_mv;
 
-    auto    mean = df.single_act_visit_async<double>("normal", n_mv);
-    auto    var = df.single_act_visit_async<double>("log_normal", ln_vv);
-    auto    corr = df.single_act_visit_async<double, double>("exponential", "log_normal", e_ln_cv);
+    auto    fut1 = df.visit_async<double>("normal", n_mv);
+    auto    fut2 = df.visit_async<double>("log_normal", ln_mv);
+    auto    fut3 = df.visit_async<double>("exponential", e_mv);
 
-    std::cout << mean.get().get_result() << ", "
-              << var.get().get_result() << ", "
-              << corr.get().get_result() << std::endl;
+    std::cout << fut1.get().get_result() << ", "
+              << fut2.get().get_result() << ", "
+              << fut3.get().get_result() << std::endl;
 
-    const auto  third = high_resolution_clock::now();
-    auto        functor = [](const auto &, const double &val)-> bool { return (val > 8); };
-    const auto  df2 =
-        df.get_view_by_sel<double, decltype(functor), double>("log_normal", functor);
+    const auto  third = time(nullptr);
 
-    std::cout << "Number of rows after select: "
-              << df2.get_column<double>("normal").size() << std::endl;
-
-    const auto  fourth = high_resolution_clock::now();
-
-    // df.sort<double, double, double>("log_normal", sort_spec::ascen,
-    //                                 "exponential", sort_spec::ascen);
-    // std::cout << "1001th value in normal column: "
-    //           << df.get_column<double>("normal")[1001] << std::endl;
-
-    const auto  fifth = high_resolution_clock::now();
-
-    std::cout << "Calculation time: "
-              << double(duration_cast<microseconds>(third - second).count()) / 1000000.0
-              << " secs\n"
-              << "Selection time: "
-              << double(duration_cast<microseconds>(fourth - third).count()) / 1000000.0
-              << " secs\n"
-              // << "Sorting time: "
-              // << double(duration_cast<microseconds>(fifth - fourth).count()) / 1000000.0
-              // << " secs\n"
-              << "Overall time: "
-              << double(duration_cast<microseconds>(fifth - first).count()) / 1000000.0
-              << " secs"
-              << std::endl;
+    std::cout << third - second << ", " << third - first
+              << " All done" << std::endl;
     return (0);
 }
 

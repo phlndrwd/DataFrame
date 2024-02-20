@@ -36,7 +36,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <memory>
 #include <stdexcept>
 #include <tuple>
-#include <utility>
 #include <vector>
 
 // ----------------------------------------------------------------------------
@@ -97,7 +96,6 @@ inline constexpr const char *DF_INDEX_COL_NAME = "INDEX";
 // ----------------------------------------------------------------------------
 
 enum class  nan_policy : bool  {
-
     pad_with_nans = true,
     dont_pad_with_nans = false,
 };
@@ -105,7 +103,6 @@ enum class  nan_policy : bool  {
 // ----------------------------------------------------------------------------
 
 enum class  sort_state : bool  {
-
     sorted = true,
     not_sorted = false,
 };
@@ -113,7 +110,6 @@ enum class  sort_state : bool  {
 // ----------------------------------------------------------------------------
 
 enum class  sort_spec : unsigned char  {
-
     ascen = 1,
     desce = 2,
     abs_ascen = 3,
@@ -123,7 +119,6 @@ enum class  sort_spec : unsigned char  {
 // ----------------------------------------------------------------------------
 
 enum class  join_policy : unsigned char  {
-
     inner_join = 1,
     left_join = 2,
     right_join = 3,
@@ -133,7 +128,6 @@ enum class  join_policy : unsigned char  {
 // ----------------------------------------------------------------------------
 
 enum class  concat_policy : unsigned char  {
-
     common_columns = 1,
     all_columns = 2,
     lhs_and_common_columns = 3,
@@ -144,7 +138,6 @@ enum class  concat_policy : unsigned char  {
 // This policy is relative to a tabular data structure
 //
 enum class  shift_policy : unsigned char  {
-
     // Shift/rotate the content of all columns down, keep index unchanged
     //
     down = 1,
@@ -190,7 +183,6 @@ enum class  fill_policy : unsigned char  {
 // ----------------------------------------------------------------------------
 
 enum class  roll_policy : unsigned char  {
-
     // Roll one block of data at a time
     // The length of result will be "input length / rolling period"
     //
@@ -205,7 +197,6 @@ enum class  roll_policy : unsigned char  {
 // ----------------------------------------------------------------------------
 
 enum class  quantile_policy : unsigned char  {
-
     lower_value = 1,   // Take the higher index
     higher_value = 2,  // Take the lower index
     mid_point = 3,     // Average the two quantiles
@@ -215,7 +206,6 @@ enum class  quantile_policy : unsigned char  {
 // ----------------------------------------------------------------------------
 
 enum class  drop_policy : unsigned char  {
-
     all = 1,       // Remove row if all columns are nan
     any = 2,       // Remove row if any column is nan
     threshold = 3, // Remove row if threshold number of columns are nan
@@ -234,16 +224,7 @@ enum class  mean_type : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
-enum class  correlation_type : unsigned char  {
-
-    pearson = 1,   // ρ =  COV(X, Y) / (σ(X) * σ(Y))
-    spearman = 2,  // ρ = 1 - ((6 * SUM(di^2)) / n * (n^2 - 1))
-};
-
-// ----------------------------------------------------------------------------
-
 enum class  hampel_type : unsigned char  {
-
     mean = 1,   // Use mean absolute deviation
     median = 2, // Use median absolute deviation
 };
@@ -251,7 +232,6 @@ enum class  hampel_type : unsigned char  {
 // ----------------------------------------------------------------------------
 
 enum class  remove_dup_spec : unsigned char  {
-
     keep_first = 1,  // Keep the first duplicated row
     keep_last = 2,   // Keep the last duplicated row
     keep_none = 3,   // Discard all duplicated rows
@@ -260,7 +240,6 @@ enum class  remove_dup_spec : unsigned char  {
 // ----------------------------------------------------------------------------
 
 enum class  exponential_decay_spec : unsigned char  {
-
     center_of_gravity = 1, // decay = 1 / (1 + value), for value >= 0
     span = 2,              // decay = 2 / (1 + value), for value >= 1
     halflife = 3,          // decay = 1 − exp(log(0.5) / value), for value > 0
@@ -273,7 +252,6 @@ enum class  exponential_decay_spec : unsigned char  {
 // in other words different types of Mean Absolute Deviation.
 //
 enum class  mad_type : unsigned char  {
-
     mean_abs_dev_around_mean = 1,
     mean_abs_dev_around_median = 2,
     median_abs_dev_around_mean = 3,
@@ -283,7 +261,6 @@ enum class  mad_type : unsigned char  {
 // ----------------------------------------------------------------------------
 
 enum class  io_format : unsigned char  {
-
     csv = 1,   // DataFrame specific csv format
     csv2 = 2,  // Regular csv format (similar to Pandas)
     json = 3,
@@ -294,7 +271,6 @@ enum class  io_format : unsigned char  {
 // ----------------------------------------------------------------------------
 
 enum class  time_frequency : unsigned char  {
-
     annual = 1,
     monthly = 2,
     weekly = 3,
@@ -310,11 +286,10 @@ enum class  time_frequency : unsigned char  {
 // ----------------------------------------------------------------------------
 
 enum class  return_policy : unsigned char  {
-
     log = 1,         // log(t1 / t0)
     percentage = 2,  // (t1 - t0) / t0
     monetary = 3,    // t1 - t0
-    trinary = 4,     // 1 if t1 - t0 > 0, else -1 if t1 - t0 < 0, else 0
+    trinary = 4,     // 1 if t1 - t0 > 0, -1 if t1 - t0 < 0, else 0
 };
 
 // ----------------------------------------------------------------------------
@@ -326,7 +301,6 @@ enum class  return_policy : unsigned char  {
 // specifying a fraction of rows to select
 //
 enum class  random_policy : unsigned char  {
-
     num_rows_with_seed = 1,  // Number of rows with specifying a seed
     num_rows_no_seed = 2,    // Number of rows with no seed specification
     frac_rows_with_seed = 3, // Fraction of rows with specifying a seed
@@ -336,7 +310,6 @@ enum class  random_policy : unsigned char  {
 // ----------------------------------------------------------------------------
 
 enum class  pattern_spec : unsigned char  {
-
     monotonic_increasing = 1,           // i >= j
     strictly_monotonic_increasing = 2,  // i > j
     monotonic_decreasing = 3,           // i <= j
@@ -352,7 +325,6 @@ enum class  pattern_spec : unsigned char  {
 // This specifies how to assign ranks to members of a column
 //
 enum class  rank_policy : unsigned char  {
-
     average = 1,  // Average of ranks, if an item is repeated
     first = 2,    // First rank, if an item is repeated
     last = 3,     // Last rank, if an item is repeated
@@ -364,7 +336,6 @@ enum class  rank_policy : unsigned char  {
 // Different types of Sigmoid functions. For now, there is no integration
 //
 enum class  sigmoid_type : unsigned char  {
-
     logistic = 1,        // f(x) = 1 / (1 + exp(-x))
     algebraic = 2,       // f(x) = 1 / sqrt(1 + pow(x, 2.0))
     // f(x) = [(exp(x) - exp(-x)) / (exp(x) + exp(-x))] = tanh(x)
@@ -378,22 +349,7 @@ enum class  sigmoid_type : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
-enum class  rectify_type : unsigned char  {
-
-    ReLU = 1,           // f(x) = x if x > 0 else 0
-    param_ReLU = 2,     // f(x) = x if x > 0 else a * x,          a <= 1
-    GeLU = 3,           // f(x) = x * SND(x),       SND = Standard Normal Dist
-    SiLU = 4,           // f(x) = x * Sigmoid(x)
-    softplus = 5,       // f(x) = log(1 + e^(a * x)) / a,         a != 0
-    elu = 6,            // f(x) = x if x > 0 else a * (e^x - 1),  a >= 0
-    mish = 7,           // f(x) = x * tanh(softplus(x))
-    metallic_mean = 8,  // f(x) = (x + sqrt(x^2 + 4)) / 2
-};
-
-// ----------------------------------------------------------------------------
-
 enum class  linreg_moving_mean_type : unsigned char  {
-
     linreg = 1,
     forecast = 2,
     slope = 3,
@@ -420,7 +376,6 @@ enum class  linreg_moving_mean_type : unsigned char  {
 //    Y[t] = T * S * R is equivalent to log(Y[t]) = log(T) + logt(S) + log(R)
 //
 enum class  decompose_type : unsigned char  {
-
     additive = 1,        // Y(t) = Trend + Seasonal + Residual
     multiplicative = 2,  // Y(t) = Trend * Seasonal * Residual
 };
@@ -428,7 +383,6 @@ enum class  decompose_type : unsigned char  {
 // ----------------------------------------------------------------------------
 
 enum class  box_cox_type : unsigned char  {
-
     // y(λ) = (y^λ - 1) / λ,  if λ != 0
     // y(λ) = log(y),         if λ == 0
     //
@@ -450,7 +404,6 @@ enum class  box_cox_type : unsigned char  {
 // ----------------------------------------------------------------------------
 
 enum class  bucket_type : unsigned char  {
-
     // Bucketize by distance between two index values (i.g. X2 - X1 = N)
     //
     by_distance = 1,
@@ -462,7 +415,6 @@ enum class  bucket_type : unsigned char  {
 // ----------------------------------------------------------------------------
 
 enum class  impurity_type : unsigned char  {
-
     // Measure how often a randomly chosen element from the set would be
     // incorrectly labeled
     //
@@ -475,97 +427,8 @@ enum class  impurity_type : unsigned char  {
 
 // ----------------------------------------------------------------------------
 
-enum class  prob_dist_type : unsigned char  {
-
-    // No negative values
-    // yi = xi / sum(X)
-    //
-    arithmetic = 1,
-
-    // All values must be >= 1
-    // yi = loge(xi) / sum(loge(X))
-    //
-    log = 2,
-
-    // yi = e^xi / sum(e^X)
-    //
-    softmax = 3,
-
-    // yi = 2^xi / sum(2^X)
-    //
-    pow2 = 4,
-
-    // yi = 10^xi / sum(10^X)
-    //
-    pow10 = 5,
-};
-
-// ----------------------------------------------------------------------------
-
-enum class  normalization_type : unsigned char  {
-
-    simple = 1,           // V / sum(xi)
-    euclidean = 2,        // V / sqrt(sum(xi^2))
-    maxi = 3,             // V / max(xi)
-    z_score = 4,          // (V - μ(V)) / σ(V)
-    min_max = 5,          // (V - min(V)) / (max(V) - min(V))
-    decimal_scaling = 6,  // V / 10^max(xi) order
-    log_transform = 7,    // ln(xi)
-    root_transform = 8,   // sqrt(xi)
-};
-
-// ----------------------------------------------------------------------------
-
-enum class  loss_function_type : unsigned char  {
-
-    // L = sum(P(x) * log(P(x) / Q(x)))  --  P = Actual, Q = Model
-    //
-    kullback_leibler = 1,
-
-    // L = sum(|Yi - YHati|) / N  --  Y = Actual, YHat = Model
-    //
-    mean_abs_error = 2,
-
-    // L = sum((Yi - YHati)^2) / N  --  Y = Actual, YHat = Model
-    //
-    mean_sqr_error = 3,
-
-    // L = sum(log(1 + Yi) - log(1 + YHati)^2) / N
-    //     Y = Actual, YHat = Model
-    //
-    mean_sqr_log_error = 4,
-
-    // L = -sum(Yi * log(P(Yi))) / N
-    //     Y = Actual, P(Yi) = Model probability prediction
-    //
-    cross_entropy = 5,
-
-    // L = sum(-(Yi * log(P(Yi))) + (1 - Yi) * log(1 - P(Yi))) / N
-    //     Y = Actual binary (0/1), P(Yi) = Model probability prediction
-    //
-    binary_cross_entropy = 6,
-
-    // L = max(sum((1 - Y) * YHat) - sum(Yi * YHati) + 1, 0)
-    //     Y = Actual, YHat = Model
-    //
-    categorical_hinge = 7,
-
-    // L = (Y . YHat) / (||Y|| * ||YHat||)
-    //     Y = Actual, YHat = Model
-    //
-    cosine_similarity = 8,
-
-    // L = sum(log(cosh(YHati - Yi))) / N
-    //     Y = Actual, YHat = Model
-    //
-    log_cosh = 9,
-};
-
-// ----------------------------------------------------------------------------
-
 template<typename T>
 struct  RandGenParams  {
-
     T   min_value { std::numeric_limits<T>::min() };
     T   max_value { std::numeric_limits<T>::max() };
 
@@ -579,10 +442,10 @@ struct  RandGenParams  {
     std::size_t     t_dist { 1 };
     // The μ distribution parameter (the mean of the distribution)
     //
-    double          mean { 0 };
+    double          mean { 1.0 };
     // the σ distribution parameter (standard deviation)
     //
-    double          std { 1 };
+    double          std { 0 };
     // The λ distribution parameter (the rate parameter)
     //
     double          lambda { 1.0 };
@@ -612,7 +475,6 @@ struct  RandGenParams  {
 //
 template<typename T>
 struct  Index2D  {
-
     T   begin {};
     T   end {};
 };
@@ -735,12 +597,12 @@ inline static const std::vector<std::string>   describe_index_col  {
 //
 struct  MemUsage  {
 
-    std::size_t column_used_memory { 0 };
-    std::size_t column_capacity_memory { 0 };
-    std::size_t column_type_size { 0 };
-    std::size_t index_used_memory { 0 };
-    std::size_t index_capacity_memory { 0 };
-    std::size_t index_type_size { 0 };
+    size_t  column_used_memory { 0 };
+    size_t  column_capacity_memory { 0 };
+    size_t  column_type_size { 0 };
+    size_t  index_used_memory { 0 };
+    size_t  index_capacity_memory { 0 };
+    size_t  index_type_size { 0 };
 
     template<typename S>
     friend S &operator << (S &stream, const MemUsage &mu)  {
@@ -754,25 +616,6 @@ struct  MemUsage  {
                << "Index Type Size: " << mu.index_type_size << '\n';
         return (stream);
     }
-};
-
-// ----------------------------------------------------------------------------
-
-struct  StringStats  {
-
-    double  avg_size { 0 };        // Average of sizes
-    double  std_size { 0 };        // Standard deviation of sizes
-    double  avg_alphabets { 0 };   // Average number of a - z, A - Z
-    double  avg_caps { 0 };        // Average number of A - Z
-    double  avg_digits { 0 };      // Average number of 0 - 9
-    double  avg_spaces { 0 };      // Average number of ' '
-    double  avg_arithmetic { 0 };  // Average number of + - / *
-    double  avg_line_feed { 0 };   // Average number of \n
-
-    // Punctuations. Anything that's not an alphabet, digit, space, line feed,
-    // or arithmetic operators.
-    //
-    double  avg_puncts { 0 };
 };
 
 // ----------------------------------------------------------------------------

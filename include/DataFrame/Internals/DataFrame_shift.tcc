@@ -44,47 +44,45 @@ void DataFrame<I, H>::self_shift(size_type periods, shift_policy sp)  {
     static_assert(std::is_base_of<HeteroVector<align_value>, DataVec>::value,
                   "Only a StdDataFrame can call self_shift()");
 
-    if (periods > 0) [[likely]] {
-        if (sp == shift_policy::down || sp == shift_policy::up) [[likely]]  {
+    if (periods > 0)  {
+        if (sp == shift_policy::down || sp == shift_policy::up)  {
             vertical_shift_functor_<Ts ...> functor(periods, sp);
-            const size_type                 num_cols = data_.size();
-            const auto                      thread_level =
-                (indices_.size() < ThreadPool::MUL_THR_THHOLD)
-                    ? 0L : get_thread_level();
-            const SpinGuard                 guard(lock_);
+            StlVecType<std::future<void>>   futures(get_thread_level());
+            size_type                       thread_count = 0;
+            const size_type                 data_size = data_.size();
 
-            if (thread_level > 2)  {
-                auto    lbd =
-                    [&functor, this](auto begin, auto end) -> void  {
-                        for (size_type idx = begin; idx < end; ++idx)
-                            this->data_[idx].change(functor);
-                    };
-                auto    futuers =
-                    thr_pool_.parallel_loop(size_type(0), num_cols,
-                                            std::move(lbd));
+            {
+                const SpinGuard guard(lock_);
 
-                for (auto &fut : futuers)  fut.get();
-            }
-            else  {
-                for (size_type idx = 0; idx < num_cols; ++idx) [[likely]]
-                    data_[idx].change(functor);
-            }
-        }
-        else  {
-            while (periods-- > 0)  {
-                const char                      *col_name =
-                    (sp == shift_policy::left)
-                        ? column_list_.front().first.c_str()
-                        : column_list_.back().first.c_str();
-                remove_column_functor_<Ts ...>  functor (col_name, *this);
+                for (size_type idx = 0; idx < data_size; ++idx)  {
+                    if (thread_count >= get_thread_level())
+                        data_[idx].change(functor);
+                    else  {
+                        auto    to_be_called =
+                            static_cast
+                          <void(DataVec::*)(vertical_shift_functor_<Ts ...> &&)>
+                                (&DataVec::template
+                                     change<vertical_shift_functor_<Ts ...>>);
 
-                for (const auto &citer : column_list_)  {
-                    if (citer.first == col_name)  {
-                        data_[citer.second].change(functor);
-                        break;
+                        futures[thread_count] =
+                            std::async(std::launch::async,
+                                       to_be_called,
+                                       &(data_[idx]),
+                                       std::move(functor));
+                        thread_count += 1;
                     }
                 }
             }
+            for (size_type idx = 0; idx < thread_count; ++idx)
+                futures[idx].get();
+        }
+        else if (sp == shift_policy::left)  {
+            while (periods-- > 0)
+                remove_column(column_list_.front().first.c_str());
+        }
+        else if (sp == shift_policy::right)  {
+            while (periods-- > 0)
+                remove_column(column_list_.back().first.c_str());
         }
     }
 }
@@ -132,16 +130,35 @@ void DataFrame<I, H>::self_rotate(size_type periods, shift_policy sp)  {
                   "Only a StdDataFrame can call self_rotate()");
 
     if (periods > 0)  {
-        if (sp == shift_policy::down || sp == shift_policy::up) [[likely]]  {
-            rotate_functor_<Ts ...> functor(periods, sp);
-            const size_type         num_cols = data_.size();
+        if (sp == shift_policy::down || sp == shift_policy::up)  {
+            rotate_functor_<Ts ...>         functor(periods, sp);
+            StlVecType<std::future<void>>   futures(get_thread_level());
+            size_type                       thread_count = 0;
+            const size_type                 data_size = data_.size();
 
             {
                 const SpinGuard guard(lock_);
 
-                for (size_type idx = 0; idx < num_cols; ++idx) [[likely]]
-                    data_[idx].change(functor);
+                for (size_type idx = 0; idx < data_size; ++idx)  {
+                    if (thread_count >= get_thread_level())
+                        data_[idx].change(functor);
+                    else  {
+                        auto    to_be_called =
+                            static_cast
+                                <void(H::*)(rotate_functor_<Ts ...> &&)>
+                                 (&H::template change<rotate_functor_<Ts ...>>);
+
+                        futures[thread_count] =
+                            std::async(std::launch::async,
+                                       to_be_called,
+                                       &(data_[idx]),
+                                       std::move(functor));
+                        thread_count += 1;
+                    }
+                }
             }
+            for (size_type idx = 0; idx < thread_count; ++idx)
+                futures[idx].get();
         }
         else if (sp == shift_policy::left)  {
             std::rotate(column_list_.begin(),

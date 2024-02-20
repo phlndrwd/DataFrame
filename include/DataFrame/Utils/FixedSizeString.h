@@ -31,7 +31,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <cstdarg>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <functional>
 
@@ -67,17 +66,14 @@ public:
 
     inline static const size_type  npos = static_cast<size_type>(-1);
 
-    [[nodiscard]] inline iterator begin () noexcept  { return (string_); }
-    [[nodiscard]] inline const_iterator
-     begin () const noexcept  { return (string_); }
+    inline iterator begin () noexcept  { return (string_); }
+    inline const_iterator begin () const noexcept  { return (string_); }
 
     // Unfortunately, the following two methods are not as cheap as they are
     // supposed to be.
     //
-    [[nodiscard]] inline iterator
-     end() noexcept  { return (string_ + size ()); }
-    [[nodiscard]] inline const_iterator
-     end() const noexcept  { return (string_ + size ()); }
+    inline iterator end() noexcept  { return (string_ + size ()); }
+    inline const_iterator end() const noexcept  { return (string_ + size ()); }
 
     VirtualString () = delete;
     VirtualString (const VirtualString &) = delete;
@@ -95,8 +91,7 @@ public:
 
         return (*this = rhs.c_str ());
     }
-    [[nodiscard]] inline VirtualString &
-    ncopy (const_pointer rhs, size_type len) noexcept  {
+    inline VirtualString &ncopy (const_pointer rhs, size_type len) noexcept  {
 
         snprintf_nowarn(string_, len, "%s", rhs);
         return (*this);
@@ -124,24 +119,24 @@ public:
         return (append (rhs.c_str ()));
     }
 
-    [[nodiscard]] inline size_type
+    inline size_type
     find (const_reference token, size_type pos = 0) const noexcept  {
 
         size_type   counter = 0;
 
         for (const_pointer itr = &(string_ [pos]); *itr; ++itr, ++counter)
-            if (string_ [pos + counter] == token) [[unlikely]]
+            if (string_ [pos + counter] == token)
                 return (pos + counter);
 
         return (npos);
     }
-    [[nodiscard]] inline size_type
+    inline size_type
     find (const_pointer token, size_type pos = 0) const noexcept  {
 
         const size_type token_len = ::strlen (token);
         const size_type self_len = size ();
 
-        if ((token_len + pos) > self_len) [[unlikely]]
+        if ((token_len + pos) > self_len)
             return (npos);
 
         size_type   counter = 0;
@@ -154,7 +149,7 @@ public:
 
         return (npos);
     }
-    [[nodiscard]] inline size_type
+    inline size_type
     find (const VirtualString &token, size_type pos = 0) const noexcept  {
 
         return (find (token.c_str (), pos));
@@ -221,61 +216,55 @@ public:
 
     // Comparison methods.
     //
-    [[nodiscard]] inline int compare (const_pointer rhs) const noexcept  {
+    inline int compare (const_pointer rhs) const noexcept  {
 
         return (::strcmp (string_, rhs));
     }
-    [[nodiscard]] inline int
-    compare (const VirtualString &rhs) const noexcept  {
+    inline int compare (const VirtualString &rhs) const noexcept  {
 
         return (compare (rhs.c_str ()));
     }
 
-    [[nodiscard]] inline bool operator == (const_pointer rhs) const noexcept  {
+    inline bool operator == (const_pointer rhs) const noexcept  {
 
         return (compare (rhs) == 0);
     }
-    [[nodiscard]] inline bool
-    operator == (const VirtualString &rhs) const noexcept  {
+    inline bool operator == (const VirtualString &rhs) const noexcept  {
 
         return (*this == rhs.c_str ());
     }
-    [[nodiscard]] inline bool operator != (const_pointer rhs) const noexcept  {
+    inline bool operator != (const_pointer rhs) const noexcept  {
 
         return (compare (rhs) != 0);
     }
-    [[nodiscard]] inline bool
-    operator != (const VirtualString &rhs) const noexcept  {
+    inline bool operator != (const VirtualString &rhs) const noexcept  {
 
         return (*this != rhs.c_str ());
     }
-    [[nodiscard]] inline bool operator > (const_pointer rhs) const noexcept  {
+    inline bool operator > (const_pointer rhs) const noexcept  {
 
         return (compare (rhs) > 0);
     }
-    [[nodiscard]] inline bool
-    operator > (const VirtualString &rhs) const noexcept  {
+    inline bool operator > (const VirtualString &rhs) const noexcept  {
 
         return (*this > rhs.c_str ());
     }
-    [[nodiscard]] inline bool operator < (const_pointer rhs) const noexcept  {
+    inline bool operator < (const_pointer rhs) const noexcept  {
 
         return (compare (rhs) < 0);
     }
-    [[nodiscard]] inline bool
-    operator < (const VirtualString &rhs) const noexcept  {
+    inline bool operator < (const VirtualString &rhs) const noexcept  {
 
         return (*this < rhs.c_str ());
     }
 
     // char based access methods.
     //
-    [[nodiscard]] inline const_reference
-    operator [] (size_type index) const noexcept  {
+    inline const_reference operator [] (size_type index) const noexcept  {
 
         return (string_ [index]);
     }
-    [[nodiscard]] inline reference operator [] (size_type index) noexcept  {
+    inline reference operator [] (size_type index) noexcept  {
 
         return (string_ [index]);
     }
@@ -289,22 +278,18 @@ public:
 
     // const utility methods.
     //
-    [[nodiscard]] inline const_pointer
-    c_str () const noexcept  { return (string_); }
-    [[nodiscard]] inline const_pointer
-    sub_c_str (size_type offset) const noexcept  {
+    inline const_pointer c_str () const noexcept  { return (string_); }
+    inline const_pointer sub_c_str (size_type offset) const noexcept  {
 
         return (offset != npos ? string_ + offset : nullptr);
     }
-    [[nodiscard]] inline size_type
-    size () const noexcept { return (::strlen(string_)); }
-    [[nodiscard]] inline bool
-    empty () const noexcept  { return (*string_ == 0); }
+    inline size_type size () const noexcept { return (::strlen(string_)); }
+    inline bool empty () const noexcept  { return (*string_ == 0); }
 
     // Fowler–Noll–Vo (FNV-1a) hash function
     // This is for 64-bit systems
     //
-    [[nodiscard]] inline size_type hash () const noexcept {
+    inline size_type hash () const noexcept {
 
         size_type       h = 14695981039346656037UL; // offset basis
         const_pointer   s = string_;

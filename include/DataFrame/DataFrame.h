@@ -31,25 +31,21 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <DataFrame/DataFrameStatsVisitors.h>
 #include <DataFrame/DataFrameTypes.h>
-#include <DataFrame/Utils/AlignedAllocator.h>
-#include <DataFrame/Utils/Concepts.h>
 #include <DataFrame/Utils/DateTime.h>
+#include <DataFrame/Utils/AlignedAllocator.h>
 #include <DataFrame/Utils/FixedSizeString.h>
-#include <DataFrame/Utils/Threads/ThreadGranularity.h>
+#include <DataFrame/Utils/ThreadGranularity.h>
 #include <DataFrame/Utils/Utils.h>
 
 #include <functional>
 #include <future>
 #include <ios>
 #include <limits>
-#include <map>
-#include <set>
 #include <string>
 #include <tuple>
 #include <type_traits>
 #include <typeindex>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -70,14 +66,19 @@ namespace hmdf
 // A DataFrame may contain one index and any number of columns of any built-in
 // or user-defined types
 //
-template<typename I, typename H>
-class   DataFrame : public ThreadGranularity {
+template<typename I, class H>
+class DataFrame : public ThreadGranularity {
 
     using DataVec = H;
+    using DataVecVec =
+        std::vector<DataVec,
+                    typename allocator_declare<
+                        DataVec,
+                        std::size_t(H::align_value)>::type>;
 
 public:  // Construction
 
-    static constexpr std::size_t   align_value { std::size_t(H::align_value) };
+    static constexpr std::size_t    align_value { std::size_t(H::align_value) };
 
     template<typename T>
     using AllocatorType = typename allocator_declare<T, align_value>::type;
@@ -113,9 +114,10 @@ public:  // Construction
     using ColumnVecType = typename type_declare<DataVec, T, align_value>::type;
 
     template<typename T>
-    using StlVecType = std::vector<T, AllocatorType<T>>;
-
-    using seed_t = std::random_device::result_type;
+    using StlVecType =
+        std::vector<T, typename allocator_declare<
+                           T,
+                           std::size_t(H::align_value)>::type>;
 
     DataFrame() = default;
 
@@ -150,41 +152,14 @@ public:  // Load/append/remove interfaces
     create_column(const char *name, bool do_lock = true);
 
     // It removes a column named name.
+    // The actual data vector is not deleted, but the column is dropped from
+    // DataFrame
     //
-    // T:
-    //   Type of the named column
-    // name:
-    //   Name of the column
-    //
-    template<typename T>
     void
     remove_column(const char *name);
 
-    // T:
-    //   Type of the indexed column
-    // index:
-    //   Index of the column
-    //
-    template<typename T>
     void
     remove_column(size_type index);
-
-    // This removes all the index and data columns but doesn't necessarily
-    // free memeory space of underlying containers. After this call DataFrame
-    // will be empty.
-    // It is very similar to std::vector clear()
-    //
-    void
-    clear();
-
-    // This swaps all self's index and data columns with the ones in other
-    // It is very similar to std::vector swap()
-    //
-    // other:
-    //   Another DataFrme of the same type
-    //
-    void
-    swap(DataFrame &other);
 
     // It renames column named from to to. If column from does not exist,
     // it throws an exception
@@ -348,11 +323,9 @@ public:  // Load/append/remove interfaces
 
     // This method loads the result() of a visitor to the named column.
     // For this method to work:
-    //     1. The visitor must have a get_result() method
+    //     1. The visitor must have a result() method
     //     2. The result must be a vector
     //     3. The visitor must define result_type type
-    //     4. Caller must to run the visitor before this call,
-    //        so the result is already populated
     //
     // NOTE: This call moves the result vector to the DataFrame. After the
     //       call the the visitor's result vector will be empty
@@ -361,144 +334,16 @@ public:  // Load/append/remove interfaces
     //   Visitor type
     // visitor:
     //   A reference to a visitor instance
-    // new_col_name:
-    //   Name of the new column to be added
+    // name:
+    //   Name of the column
     // padding:
     //   If true, it pads the data column with nan, if it is shorter than the
     //   index column.
     //
-    template<has_result V>
+    template<typename V>
     size_type
     load_result_as_column(V &visitor,
-                          const char *new_col_name,
-                          nan_policy padding = nan_policy::pad_with_nans);
-
-    // This is a shortcut to running an algorithm and loading its vectored
-    // result as a column in one shot. It runs and loads the result() of a
-    // visitor to the named column.
-    // For this method to work:
-    //     1. The visitor must have a result() method
-    //     2. The result must be a vector
-    //     3. The visitor must define result_type type
-    //
-    // T:
-    //   Column type to be passed to the visitor
-    // V:
-    //   Visitor type
-    // col_name:
-    //   Name of the column to be passed to the visitor
-    // visitor:
-    //   A reference to a visitor instance
-    // new_col_name:
-    //   Name of the new column to be added
-    // padding:
-    //   If true, it pads the data column with nan, if it is shorter than the
-    //   index column.
-    //
-    template<typename T, has_result V>
-    size_type
-    load_result_as_column(const char *col_name,
-                          V &&visitor,
-                          const char *new_col_name,
-                          nan_policy padding = nan_policy::pad_with_nans);
-
-    // Same as above but supporting two columns.
-    //
-    // T1:
-    //   First column type to be passed to the visitor
-    // T2:
-    //   Second column type to be passed to the visitor
-    // V:
-    //   Visitor type
-    // col_name1:
-    //   Name of the first column to be passed to the visitor
-    // col_name2:
-    //   Name of the second column to be passed to the visitor
-    // visitor:
-    //   A reference to a visitor instance
-    // new_col_name:
-    //   Name of the new column to be added
-    // padding:
-    //   If true, it pads the data column with nan, if it is shorter than the
-    //   index column.
-    //
-    template<typename T1, typename T2, has_result V>
-    size_type
-    load_result_as_column(const char *col_name1,
-                          const char *col_name2,
-                          V &&visitor,
-                          const char *new_col_name,
-                          nan_policy padding = nan_policy::pad_with_nans);
-
-    // Same as above but supporting three columns.
-    //
-    // T1:
-    //   First column type to be passed to the visitor
-    // T2:
-    //   Second column type to be passed to the visitor
-    // T3:
-    //   Third column type to be passed to the visitor
-    // V:
-    //   Visitor type
-    // col_name1:
-    //   Name of the first column to be passed to the visitor
-    // col_name2:
-    //   Name of the second column to be passed to the visitor
-    // col_name3:
-    //   Name of the third column to be passed to the visitor
-    // visitor:
-    //   A reference to a visitor instance
-    // new_col_name:
-    //   Name of the new column to be added
-    // padding:
-    //   If true, it pads the data column with nan, if it is shorter than the
-    //   index column.
-    //
-    template<typename T1, typename T2, typename T3, has_result V>
-    size_type
-    load_result_as_column(const char *col_name1,
-                          const char *col_name2,
-                          const char *col_name3,
-                          V &&visitor,
-                          const char *new_col_name,
-                          nan_policy padding = nan_policy::pad_with_nans);
-
-    // Same as above but supporting four columns.
-    //
-    // T1:
-    //   First column type to be passed to the visitor
-    // T2:
-    //   Second column type to be passed to the visitor
-    // T3:
-    //   Third column type to be passed to the visitor
-    // T4:
-    //   Fourth column type to be passed to the visitor
-    // V:
-    //   Visitor type
-    // col_name1:
-    //   Name of the first column to be passed to the visitor
-    // col_name2:
-    //   Name of the second column to be passed to the visitor
-    // col_name3:
-    //   Name of the third column to be passed to the visitor
-    // col_name4:
-    //   Name of the fourth column to be passed to the visitor
-    // visitor:
-    //   A reference to a visitor instance
-    // new_col_name:
-    //   Name of the new column to be added
-    // padding:
-    //   If true, it pads the data column with nan, if it is shorter than the
-    //   index column.
-    //
-    template<typename T1, typename T2, typename T3, typename T4, has_result V>
-    size_type
-    load_result_as_column(const char *col_name1,
-                          const char *col_name2,
-                          const char *col_name3,
-                          const char *col_name4,
-                          V &&visitor,
-                          const char *new_col_name,
+                          const char *name,
                           nan_policy padding = nan_policy::pad_with_nans);
 
     // Given a categorical (nominal) column, it generates a series of numerical
@@ -520,7 +365,7 @@ public:  // Load/append/remove interfaces
     // numeric_cols_prefix:
     //   Optional prefix for generated column names
     //
-    template<hashable_stringable T, typename IT = int>
+    template<typename T, typename IT = int>
     size_type
     load_indicators(const char *cat_col_name,
                     const char *numeric_cols_prefix = nullptr);
@@ -741,87 +586,6 @@ public:  // Load/append/remove interfaces
                        const char *name3,
                        F &sel_functor);
 
-    // This reomves data rows by basic Glob-like pattern matching (also similar
-    // to SQL like clause) to filter data in the named column. Each element of
-    // the named column is checked against a Glob-like matching logic
-    //
-    // Globbing rules:
-    //
-    //      '*'       Matches any sequence of zero or more characters.
-    //
-    //      '?'       Matches exactly one character.
-    //
-    //     [...]      Matches one character from the enclosed list of
-    //                characters.
-    //
-    //     [^...]     Matches one character not in the enclosed list.
-    //
-    // With the [...] and [^...] matching, a ']' character can be included
-    // in the list by making it the first character after '[' or '^'.  A
-    // range of characters can be specified using '-'.  Example:
-    // "[a-z]" matches any single lower-case letter. To match a '-', make
-    // it the last character in the list.
-    //
-    // Hints: to match '*' or '?', put them in "[]". Like this:
-    //        abc[*]xyz matches "abc*xyz" only
-    //
-    // NOTE: This could be, in some cases, n-squared. But it is pretty fast
-    //       with moderately sized strings. I have not tested this with
-    //       huge/massive strings.
-    //
-    // T:
-    //   Type of the named column. Based on the concept, it can only be either
-    //   of these types: std::string, VirtualString, const char *, char *
-    // Ts:
-    //   List all the types of all data columns. A type should be specified in
-    //   the list only once.
-    // name:
-    //   Name of the data column
-    // pattern:
-    //   Glob like pattern to use for matching strings
-    // case_insensitive:
-    //   If true, matching logic ignores case
-    // esc_char:
-    //   Character used for escape
-    //
-    template<StringOnly T, typename ... Ts>
-    void
-    remove_data_by_like(const char *name,
-                        const char *pattern,
-                        bool case_insensitive = false,
-                        char esc_char = '\\');
-
-    // This does the same function as above remove_data_by_like() but operating
-    // on two columns.
-    //
-    // T:
-    //   Type of the named columns. Based on the concept, it can only be either
-    //   of these types: std::string, VirtualString, const char *, char *
-    // Ts:
-    //   List all the types of all data columns. A type should be specified in
-    //   the list only once.
-    // name1:
-    //   Name of the first data column
-    // name2:
-    //   Name of the second data column
-    // pattern1:
-    //   Glob like pattern to use for matching strings in the first column
-    // pattern2:
-    //   Glob like pattern to use for matching strings in the second column
-    // case_insensitive:
-    //   If true, matching logic ignores case
-    // esc_char:
-    //   Character used for escape
-    //
-    template<StringOnly T, typename ... Ts>
-    void
-    remove_data_by_like(const char *name1,
-                        const char *name2,
-                        const char *pattern1,
-                        const char *pattern2,
-                        bool case_insensitive = false,
-                        char esc_char = '\\');
-
     // It removes duplicate rows and returns a new DataFrame. Duplication is
     // determined by the given column. remove_dup_spec determines which
     // of the duplicated rows to keep.
@@ -841,7 +605,7 @@ public:  // Load/append/remove interfaces
     // rds:
     //   Determined which of the duplicated columns to keep
     //
-    template<hashable_equal T, typename ... Ts>
+    template<typename T, typename ... Ts>
     [[nodiscard]] DataFrame
     remove_duplicates(const char *name,
                       bool include_index,
@@ -870,7 +634,7 @@ public:  // Load/append/remove interfaces
     // rds:
     //   Determined which of the duplicated columns to keep
     //
-    template<hashable_equal T1, hashable_equal T2, typename ... Ts>
+    template<typename T1, typename T2, typename ... Ts>
     [[nodiscard]] DataFrame
     remove_duplicates(const char *name1,
                       const char *name2,
@@ -899,8 +663,7 @@ public:  // Load/append/remove interfaces
     // rds:
     //   Determined which of the duplicated columns to keep
     //
-    template<hashable_equal T1, hashable_equal T2, hashable_equal T3,
-             typename ... Ts>
+    template<typename T1, typename T2, typename T3, typename ... Ts>
     [[nodiscard]] DataFrame
     remove_duplicates(const char *name1,
                       const char *name2,
@@ -934,8 +697,7 @@ public:  // Load/append/remove interfaces
     // rds:
     //   Determined which of the duplicated columns to keep
     //
-    template<hashable_equal T1, hashable_equal T2,
-             hashable_equal T3, hashable_equal T4,
+    template<typename T1, typename T2, typename T3, typename T4,
              typename ... Ts>
     [[nodiscard]] DataFrame
     remove_duplicates(const char *name1,
@@ -975,8 +737,7 @@ public:  // Load/append/remove interfaces
     // rds:
     //   Determined which of the duplicated columns to keep
     //
-    template<hashable_equal T1, hashable_equal T2, hashable_equal T3,
-             hashable_equal T4, hashable_equal T5,
+    template<typename T1, typename T2, typename T3, typename T4, typename T5,
              typename ... Ts>
     [[nodiscard]] DataFrame
     remove_duplicates(const char *name1,
@@ -1021,9 +782,8 @@ public:  // Load/append/remove interfaces
     // rds:
     //   Determined which of the duplicated columns to keep
     //
-    template<hashable_equal T1, hashable_equal T2, hashable_equal T3,
-             hashable_equal T4, hashable_equal T5, hashable_equal T6,
-             typename ... Ts>
+    template<typename T1, typename T2, typename T3, typename T4, typename T5,
+             typename T6, typename ... Ts>
     [[nodiscard]] DataFrame
     remove_duplicates(const char *name1,
                       const char *name2,
@@ -1047,8 +807,7 @@ public:  // Data manipulation
     template<typename ... Ts>
     void
     shuffle(const StlVecType<const char *> &col_names,
-            bool also_shuffle_index,
-            seed_t seed = seed_t(-1));
+            bool also_shuffle_index);
 
     // It fills all the "missing values" with the given values, and/or using
     // the given method.
@@ -1122,6 +881,9 @@ public:  // Data manipulation
     // limit. If limit is omitted, all values will be replaced.
     // It returns number of items replaced.
     //
+    // Ts:
+    //   List all the types of all data columns. A type should be specified in
+    //   the list only once.
     // N:
     //   Size of old_values and new_values vectors
     // col_name:
@@ -1172,7 +934,7 @@ public:  // Data manipulation
     // functor:
     //   An instance of the functor
     //
-    template<typename T, replace_callable<I, T> F>
+    template<typename T, typename F>
     void
     replace(const char *col_name, F &functor);
 
@@ -1181,7 +943,7 @@ public:  // Data manipulation
     // NOTE: multiple instances of replace_async() maybe executed for
     //       different columns at the same time with no problem.
     //
-    template<typename T, replace_callable<I, T> F>
+    template<typename T, typename F>
     [[nodiscard]] std::future<void>
     replace_async(const char *col_name, F &functor);
 
@@ -1357,7 +1119,7 @@ public:  // Data manipulation
     // args:
     //   List of triples to specify the column summarization
     //
-    template<comparable T, typename I_V, typename ... Ts>
+    template<typename T, typename I_V, typename ... Ts>
     [[nodiscard]] DataFrame
     groupby1(const char *col_name, I_V &&idx_visitor, Ts&& ... args) const;
 
@@ -1380,7 +1142,7 @@ public:  // Data manipulation
     // args:
     //   List of triples to specify the column summarization
     //
-    template<comparable T1, comparable T2, typename I_V, typename ... Ts>
+    template<typename T1, typename T2, typename I_V, typename ... Ts>
     [[nodiscard]] DataFrame
     groupby2(const char *col_name1,
              const char *col_name2,
@@ -1410,7 +1172,7 @@ public:  // Data manipulation
     // args:
     //   List of triples to specify the column summarization
     //
-    template<comparable T1, comparable T2, comparable T3,
+    template<typename T1, typename T2, typename T3,
              typename I_V, typename ... Ts>
     [[nodiscard]] DataFrame
     groupby3(const char *col_name1,
@@ -1421,7 +1183,7 @@ public:  // Data manipulation
 
     // Same as groupby1() above, but executed asynchronously
     //
-    template<comparable T, typename I_V, typename ... Ts>
+    template<typename T, typename I_V, typename ... Ts>
     [[nodiscard]] std::future<DataFrame>
     groupby1_async(const char *col_name,
                    I_V &&idx_visitor,
@@ -1429,7 +1191,7 @@ public:  // Data manipulation
 
     // Same as groupby2() above, but executed asynchronously
     //
-    template<comparable T1, comparable T2, typename I_V, typename ... Ts>
+    template<typename T1, typename T2, typename I_V, typename ... Ts>
     [[nodiscard]] std::future<DataFrame>
     groupby2_async(const char *col_name1,
                    const char *col_name2,
@@ -1438,7 +1200,7 @@ public:  // Data manipulation
 
     // Same as groupby3() above, but executed asynchronously
     //
-    template<comparable T1, comparable T2, comparable T3,
+    template<typename T1, typename T2, typename T3,
              typename I_V, typename ... Ts>
     [[nodiscard]] std::future<DataFrame>
     groupby3_async(const char *col_name1,
@@ -1466,11 +1228,11 @@ public:  // Data manipulation
     // col_name:
     //   Name of the column
     //
-    template<hashable_equal T>
+    template<typename T>
     [[nodiscard]] DataFrame<T, H>
     value_counts(const char *col_name) const;
 
-    template<hashable_equal T>
+    template<typename T>
     [[nodiscard]] DataFrame<T, H>
     value_counts(size_type index) const;
 
@@ -1598,7 +1360,7 @@ public:  // Data manipulation
     //   Specifies how to join. For example inner join, or left join, etc.
     //   (See join_policy definition)
     //
-    template<typename RHS_T, comparable T, typename ... Ts>
+    template<typename RHS_T, typename T, typename ... Ts>
     [[nodiscard]] DataFrame<unsigned int, H>
     join_by_column(const RHS_T &rhs, const char *name, join_policy jp) const;
 
@@ -1706,8 +1468,7 @@ public:  // Data manipulation
     [[nodiscard]] DataFrame
     shift(size_type periods, shift_policy sp) const;
 
-    // This copies the named column into another vector and shifts it up
-    // or down
+    // This copies the named column into another vector and shifts it up or down
     // and returns it.
     // It is handy to create columns of shifted data in the dataframe for
     // machine-learning analysis
@@ -1896,7 +1657,7 @@ public: // Read/access and slicing interfaces
     // T:
     //   Data type of the named column
     //
-    template<hashable_equal T>
+    template<typename T>
     [[nodiscard]] ColumnVecType<T>
     get_col_unique_values(const char *name) const;
 
@@ -2095,6 +1856,9 @@ public: // Read/access and slicing interfaces
     //   1) The result is a view
     //   2) Since the result is a view, you cannot call make_consistent() on
     //      the result.
+    //
+    // NOTE: Although this is a const method, it returns a view. So, the data
+    //       could still be modified through the returned view
     //
     // T:
     //   Type of the named column
@@ -2576,130 +2340,6 @@ public: // Read/access and slicing interfaces
     [[nodiscard]] DataFrame
     get_data_by_sel(F &sel_functor, FilterCols&&... filter_cols) const;
 
-    // This method does a basic Glob-like pattern matching (also similar to
-    // SQL like clause) to filter data in the named column.
-    // It returns a new DataFrame. Each element of the named column is checked
-    // against a Glob-like matching logic
-    //
-    // Globbing rules:
-    //
-    //      '*'       Matches any sequence of zero or more characters.
-    //
-    //      '?'       Matches exactly one character.
-    //
-    //     [...]      Matches one character from the enclosed list of
-    //                characters.
-    //
-    //     [^...]     Matches one character not in the enclosed list.
-    //
-    // With the [...] and [^...] matching, a ']' character can be included
-    // in the list by making it the first character after '[' or '^'.  A
-    // range of characters can be specified using '-'.  Example:
-    // "[a-z]" matches any single lower-case letter. To match a '-', make
-    // it the last character in the list.
-    //
-    // Hints: to match '*' or '?', put them in "[]". Like this:
-    //        abc[*]xyz matches "abc*xyz" only
-    //
-    // NOTE: This could be, in some cases, n-squared. But it is pretty fast
-    //       with moderately sized strings. I have not tested this with
-    //       huge/massive strings.
-    //
-    // T:
-    //   Type of the named column. Based on the concept, it can only be either
-    //   of these types: std::string, VirtualString, const char *, char *
-    // Ts:
-    //   List all the types of all data columns. A type should be specified in
-    //   the list only once.
-    // name:
-    //   Name of the data column
-    // pattern:
-    //   Glob like pattern to use for matching strings
-    // case_insensitive:
-    //   If true, matching logic ignores case
-    // esc_char:
-    //   Character used for escape
-    //
-    template<StringOnly T, typename ... Ts>
-    [[nodiscard]] DataFrame
-    get_data_by_like(const char *name,
-                     const char *pattern,
-                     bool case_insensitive = false,
-                     char esc_char = '\\') const;
-
-    // This is identical with above get_data_by_like(), but:
-    //   1) The result is a view
-    //   2) Since the result is a view, you cannot call make_consistent() on
-    //      the result.
-    //
-    template<StringOnly T, typename ... Ts>
-    [[nodiscard]] PtrView
-    get_view_by_like(const char *name,
-                     const char *pattern,
-                     bool case_insensitive = false,
-                     char esc_char = '\\');
-
-    template<StringOnly T, typename ... Ts>
-    [[nodiscard]] ConstPtrView
-    get_view_by_like(const char *name,
-                     const char *pattern,
-                     bool case_insensitive = false,
-                     char esc_char = '\\') const;
-
-    // This does the same function as above get_data_by_like() but operating
-    // on two columns.
-    //
-    // T:
-    //   Type of both named columns. Based on the concept, it can only be
-    //   either of these types: std::string, VirtualString, const char *, char *
-    // Ts:
-    //   List all the types of all data columns. A type should be specified in
-    //   the list only once.
-    // name1:
-    //   Name of the first data column
-    // name2:
-    //   Name of the second data column
-    // pattern1:
-    //   Glob like pattern to use for matching strings for the first column
-    // pattern2:
-    //   Glob like pattern to use for matching strings for the second column
-    // case_insensitive:
-    //   If true, matching logic ignores case
-    // esc_char:
-    //   Character used for escape
-    //
-    template<StringOnly T, typename ... Ts>
-    [[nodiscard]] DataFrame
-    get_data_by_like(const char *name1,
-                     const char *name2,
-                     const char *pattern1,
-                     const char *pattern2,
-                     bool case_insensitive = false,
-                     char esc_char = '\\') const;
-
-    // This is identical with above get_data_by_like(), but:
-    //   1) The result is a view
-    //   2) Since the result is a view, you cannot call make_consistent() on
-    //      the result.
-    //
-    template<StringOnly T, typename ... Ts>
-    [[nodiscard]] PtrView
-    get_view_by_like(const char *name1,
-                     const char *name2,
-                     const char *pattern1,
-                     const char *pattern2,
-                     bool case_insensitive = false,
-                     char esc_char = '\\');
-
-    template<StringOnly T, typename ... Ts>
-    [[nodiscard]] ConstPtrView
-    get_view_by_like(const char *name1,
-                     const char *name2,
-                     const char *pattern1,
-                     const char *pattern2,
-                     bool case_insensitive = false,
-                     char esc_char = '\\') const;
-
     // It returns a DataFrame (including the index and data columns)
     // containing the data from uniform random selection.
     // random_policy determines the behavior of method.
@@ -2725,7 +2365,7 @@ public: // Read/access and slicing interfaces
     //
     template<typename ... Ts>
     [[nodiscard]] DataFrame
-    get_data_by_rand(random_policy spec, double n, seed_t seed = 0) const;
+    get_data_by_rand(random_policy spec, double n, size_type seed = 0) const;
 
     // It behaves like get_data_by_rand(), but it returns a PtrView.
     // A view is a DataFrame that is a reference to the original DataFrame.
@@ -2754,11 +2394,11 @@ public: // Read/access and slicing interfaces
     //
     template<typename ... Ts>
     [[nodiscard]] PtrView
-    get_view_by_rand(random_policy spec, double n, seed_t seed = 0);
+    get_view_by_rand(random_policy spec, double n, size_type seed = 0);
 
     template<typename ... Ts>
     [[nodiscard]] ConstPtrView
-    get_view_by_rand(random_policy spec, double n, seed_t seed = 0) const;
+    get_view_by_rand(random_policy spec, double n, size_type seed = 0) const;
 
     // This returns a DataFrame with index and col_names copied from the
     // original DataFrame
@@ -2878,37 +2518,6 @@ public: // Read/access and slicing interfaces
     [[nodiscard]] typename DataFrame<T, H>::ConstView
     get_reindexed_view(const char *col_to_be_index,
                        const char *old_index_name = nullptr) const;
-
-    // This call takes a string column as input and returns a set of statistics
-    // about the strings in that column. You could use these statistics to
-    // figure out the characteristics of the strings in the column. Or you
-    // could use the statistics to determine if a new string is acceptable
-    // for this column.
-    //
-    // T:
-    //   Type of the input column. Based on the concept, it can only be either
-    //   of these types: std::string, VirtualString, const char *, char *
-    // col_name:
-    //   Name of the input column
-    //
-    template<StringOnly T>
-    [[nodiscard]] StringStats
-    get_str_col_stats(const char *col_name) const;
-
-    // This retunrs the number of inversions in the named column. For example,
-    // in a column that is already sorted, the number of inversions is zero.
-    // In a column that is sorted in reverse, the number of inversions is
-    // n(n - 1) / 2.
-    //
-    // T:
-    //   Data type of the named column
-    // C:
-    //   Type of the comparison functor defaulted to std::less
-    // col_name:
-    //   Name of the column
-    //
-    template<typename T, typename C = std::less<T>>
-    size_type inversion_count(const char *col_name) const;
 
     // This function returns a DataFrame indexed by std::string that provides
     // a few statistics about the columns of the calling DataFrame.
@@ -3258,9 +2867,9 @@ public:  // Visitors
     // args:
     //   A variable list of arguments consisting of
     //       std::pair(<const char *name,
-    //                  &std::function<bool(const IndexType &,
-    //                                      const char *,
-    //                                      [const] T &)>)
+    //                  &std::function<bool (const IndexType &,
+    //                                       const char *,
+    //                                       [const] T &)>)
     //   Each pair represents a column name and the functor to run on it.
     //
     // NOTE: The second member of pair is a _pointer_ to the function or
@@ -4254,44 +3863,19 @@ public:  // Reading and writing
 
 private:
 
-    // Internally used containers aligned with DataFrame alignment
-    //
-    template<typename K,
-             typename HA = std::hash<K>,
-             typename E = std::equal_to<K>>
-    using DFUnorderedSet = std::unordered_set<K, HA, E, AllocatorType<K>>;
-
-    template<typename K,
-             typename T,
-             typename HA = std::hash<K>,
-             typename E = std::equal_to<K>>
-    using DFUnorderedMap =
-        std::unordered_map<K, T, HA, E, AllocatorType<std::pair<const K, T>>>;
-
-    template<typename K, typename C = std::less<K>>
-    using DFSet = std::set<K, C, AllocatorType<K>>;
-
-    template<typename K, typename T, typename C = std::less<K>>
-    using DFMap = std::map<K, T, C, AllocatorType<std::pair<const K, T>>>;
-
-    // All DataFrames types should be able to access private data of other
-    // DataFrame types
-    //
     template<typename ALT_I, typename ALT_H>
     friend class DataFrame;
 
-    // Maps column names to their vector index
-    //
     using ColNameDict =
-        DFUnorderedMap<ColNameType, size_type, std::hash<VirtualString>>;
+        std::unordered_map<
+            ColNameType,
+            size_type,
+            std::hash<VirtualString>,
+            std::equal_to<ColNameType>,
+            typename allocator_declare<
+                std::pair<const ColNameType, size_type>, align_value>::type>;
 
-    // List of column names and indices
-    //
     using ColNameList = StlVecType<std::pair<ColNameType, size_type>>;
-
-    // Vector of Heterogeneous vectors
-    //
-    using DataVecVec = std::vector<DataVec, AllocatorType<DataVec>>;
 
     // Data fields
     //
@@ -4304,7 +3888,7 @@ private:
     //
     ColNameList     column_list_ { };  // Vector of column names and indices
 
-    inline static SpinLock  *lock_ { nullptr };  // No lock safety by default
+    inline static SpinLock *lock_ { nullptr };  // No lock safety by default
 
     // Private methods
     //

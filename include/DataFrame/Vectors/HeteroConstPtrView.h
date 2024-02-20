@@ -30,6 +30,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <DataFrame/Vectors/VectorPtrView.h>
+#include <DataFrame/DataFrameExports.h>
 
 #include <functional>
 #include <new>
@@ -48,7 +49,7 @@ struct  HeteroConstPtrView {
 
     using size_type = size_t;
 
-    HeteroConstPtrView();
+    HMDF_API HeteroConstPtrView();
     template<typename T>
     HeteroConstPtrView(const T *begin_ptr, const T *end_ptr);
 
@@ -68,35 +69,36 @@ struct  HeteroConstPtrView {
     HeteroConstPtrView(VectorConstPtrView<T, A> &vec);
     template<typename T>
     HeteroConstPtrView(VectorConstPtrView<T, A> &&vec);
-    HeteroConstPtrView(const HeteroConstPtrView &that);
-    HeteroConstPtrView(HeteroConstPtrView &&that);
+    HMDF_API HeteroConstPtrView(const HeteroConstPtrView &that);
+    HMDF_API HeteroConstPtrView(HeteroConstPtrView &&that);
 
     ~HeteroConstPtrView() { clear(); }
 
-    HeteroConstPtrView &operator= (const HeteroConstPtrView &rhs);
-    HeteroConstPtrView &operator= (HeteroConstPtrView &&rhs);
+    HMDF_API HeteroConstPtrView &operator= (const HeteroConstPtrView &rhs);
+    HMDF_API HeteroConstPtrView &operator= (HeteroConstPtrView &&rhs);
 
     template<typename T>
-    [[nodiscard]] VectorConstPtrView<T, A> &get_vector();
+    VectorConstPtrView<T, A> &get_vector();
     template<typename T>
-    [[nodiscard]] const VectorConstPtrView<T, A> &get_vector() const;
+    const VectorConstPtrView<T, A> &get_vector() const;
 
     template<typename T>
-    [[nodiscard]] size_type size () const { return (get_vector<T>().size()); }
+    typename VectorConstPtrView<T, A>::size_type
+    size () const { return (get_vector<T>().size()); }
 
-    void clear();
-
-    template<typename T>
-    [[nodiscard]] bool empty() const noexcept;
+    HMDF_API void clear();
 
     template<typename T>
-    [[nodiscard]] const T &at(size_type idx) const;
+    bool empty() const noexcept;
 
     template<typename T>
-    [[nodiscard]] const T &back() const;
+    const T &at(size_type idx) const;
 
     template<typename T>
-    [[nodiscard]] const T &front() const;
+    const T &back() const;
+
+    template<typename T>
+    const T &front() const;
 
     template<typename... Ts>
     struct type_list  {   };

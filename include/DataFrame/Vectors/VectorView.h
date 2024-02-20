@@ -86,36 +86,29 @@ public:
         end_ptr_ += 1;
     }
 
-    [[nodiscard]] inline bool
-    empty () const noexcept  { return (begin_ptr_ == end_ptr_); }
-    [[nodiscard]] inline size_type size () const noexcept  {
+    inline bool empty () const noexcept  { return (begin_ptr_ == end_ptr_); }
+    inline size_type size () const noexcept  {
 
         return (static_cast<size_type>(end_ptr_ - begin_ptr_));
     }
-    [[nodiscard]] inline size_type
-    capacity () const noexcept  { return (size()); }
+    inline size_type capacity () const noexcept  { return (size()); }
     inline void clear () noexcept  { begin_ptr_ = end_ptr_ = nullptr; }
 
-    [[nodiscard]] inline reference
-    at (size_type i) noexcept  { return (*(begin_ptr_ + i)); }
-    [[nodiscard]] inline const_reference
+    inline reference at (size_type i) noexcept  { return (*(begin_ptr_ + i)); }
+    inline const_reference
     at (size_type i) const noexcept  { return (*(begin_ptr_ + i)); }
-    [[nodiscard]] inline reference operator [] (size_type i) noexcept  {
+    inline reference operator [] (size_type i) noexcept  {
 
         return (*(begin_ptr_ + i));
     }
-    [[nodiscard]] inline const_reference
-    operator [] (size_type i) const noexcept  {
+    inline const_reference operator [] (size_type i) const noexcept  {
 
         return (*(begin_ptr_ + i));
     }
-    [[nodiscard]] inline reference front() noexcept  { return (*begin_ptr_); }
-    [[nodiscard]] inline const_reference
-    front() const noexcept  { return (*begin_ptr_); }
-    [[nodiscard]] inline reference
-    back() noexcept  { return (*(end_ptr_ - 1)); }
-    [[nodiscard]] inline const_reference
-    back() const noexcept  { return (*(end_ptr_ - 1)); }
+    inline reference front() noexcept  { return (*begin_ptr_); }
+    inline const_reference front() const noexcept  { return (*begin_ptr_); }
+    inline reference back() noexcept  { return (*(end_ptr_ - 1)); }
+    inline const_reference back() const noexcept  { return (*(end_ptr_ - 1)); }
 
     // These are to match the std::vector interface, so things will compile
     //
@@ -390,22 +383,20 @@ public:
         friend class    VectorView::const_iterator;
     };
 
-    [[nodiscard]] inline iterator
-    begin () noexcept  { return (iterator (begin_ptr_)); }
-    [[nodiscard]] inline iterator
-    end () noexcept  { return (iterator (end_ptr_)); }
-    [[nodiscard]] inline const_iterator
+    inline iterator begin () noexcept  { return (iterator (begin_ptr_)); }
+    inline iterator end () noexcept  { return (iterator (end_ptr_)); }
+    inline const_iterator
     begin () const noexcept  { return (const_iterator (begin_ptr_)); }
-    [[nodiscard]] inline const_iterator
+    inline const_iterator
     end () const noexcept  { return (const_iterator (end_ptr_)); }
 
-    [[nodiscard]] inline std::reverse_iterator<iterator>
+    inline std::reverse_iterator<iterator>
     rbegin() noexcept { return (std::make_reverse_iterator(end())); }
-    [[nodiscard]] inline std::reverse_iterator<iterator>
+    inline std::reverse_iterator<iterator>
     rend() noexcept { return (std::make_reverse_iterator(begin())); }
-    [[nodiscard]] inline std::reverse_iterator<const_iterator>
+    inline std::reverse_iterator<const_iterator>
     rbegin() const noexcept { return (std::make_reverse_iterator(end())); }
-    [[nodiscard]] inline std::reverse_iterator<const_iterator>
+    inline std::reverse_iterator<const_iterator>
     rend() const noexcept { return (std::make_reverse_iterator(begin())); }
 
 private:
@@ -461,25 +452,21 @@ public:
         end_ptr_ += 1;
     }
 
-    [[nodiscard]] inline bool
-    empty () const noexcept  { return (begin_ptr_ == end_ptr_); }
-    [[nodiscard]] inline size_type size () const noexcept  {
+    inline bool empty () const noexcept  { return (begin_ptr_ == end_ptr_); }
+    inline size_type size () const noexcept  {
 
         return (static_cast<size_type>(end_ptr_ - begin_ptr_));
     }
     inline void clear () noexcept  { begin_ptr_ = end_ptr_ = nullptr; }
 
-    [[nodiscard]] inline const_reference
+    inline const_reference
     at (size_type i) const noexcept  { return (*(begin_ptr_ + i)); }
-    [[nodiscard]] inline const_reference
-    operator [] (size_type i) const noexcept  {
+    inline const_reference operator [] (size_type i) const noexcept  {
 
         return (*(begin_ptr_ + i));
     }
-    [[nodiscard]] inline const_reference 
-    ront() const noexcept  { return (*begin_ptr_); }
-    [[nodiscard]] inline const_reference
-    back() const noexcept  { return (*(end_ptr_ - 1)); }
+    inline const_reference front() const noexcept  { return (*begin_ptr_); }
+    inline const_reference back() const noexcept  { return (*(end_ptr_ - 1)); }
 
     // These are to match the std::vector interface, so things will compile
     //
@@ -627,14 +614,14 @@ public:
         const_pointer   node_ { nullptr };
     };
 
-    [[nodiscard]] inline const_iterator
+    inline const_iterator
     begin () const noexcept  { return (const_iterator (begin_ptr_)); }
-    [[nodiscard]] inline const_iterator
+    inline const_iterator
     end () const noexcept  { return (const_iterator (end_ptr_)); }
 
-    [[nodiscard]] inline std::reverse_iterator<const_iterator>
+    inline std::reverse_iterator<const_iterator>
     rbegin() const noexcept { return (std::make_reverse_iterator(end())); }
-    [[nodiscard]] inline std::reverse_iterator<const_iterator>
+    inline std::reverse_iterator<const_iterator>
     rend() const noexcept { return (std::make_reverse_iterator(begin())); }
 
 private:

@@ -883,17 +883,15 @@ static void test_RSIVisitor()  {
 
         df.single_act_visit<double>("IBM_Close", rsi);
 
-        assert(rsi.get_result().size() == 1721);
-        assert(std::isnan(rsi.get_result()[0]));
-        assert(std::isnan(rsi.get_result()[12]));
-        assert(std::abs(rsi.get_result()[13] - 41.4627) < 0.0001);
-        assert(std::abs(rsi.get_result()[22] - 35.7869) < 0.0001);
-        assert(std::abs(rsi.get_result()[24] - 37.3135) < 0.0001);
-        assert(std::abs(rsi.get_result()[28] - 46.4432) < 0.0001);
-        assert(std::abs(rsi.get_result()[33] - 52.1746) < 0.0001);
-        assert(std::abs(rsi.get_result()[1720] - 43.3186) < 0.0001);
-        assert(std::abs(rsi.get_result()[1712] - 47.0717) < 0.0001);
-        assert(std::abs(rsi.get_result()[1707] - 54.2938) < 0.0001);
+        assert(rsi.get_result().size() == 1708);
+        assert(std::abs(rsi.get_result()[1] - 41.0826) < 0.0001);
+        assert(std::abs(rsi.get_result()[9] - 35.7869) < 0.0001);
+        assert(std::abs(rsi.get_result()[11] - 37.3135) < 0.0001);
+        assert(std::abs(rsi.get_result()[15] - 46.4432) < 0.0001);
+        assert(std::abs(rsi.get_result()[26] - 53.6717) < 0.0001);
+        assert(std::abs(rsi.get_result()[1707] - 43.3186) < 0.0001);
+        assert(std::abs(rsi.get_result()[1699] - 47.0717) < 0.0001);
+        assert(std::abs(rsi.get_result()[1694] - 54.2938) < 0.0001);
     }
     catch (const DataFrameError &ex)  {
         std::cout << ex.what() << std::endl;
@@ -1477,177 +1475,26 @@ static void test_NormalizeVisitor()  {
 
     df.load_data(std::move(ulgvec2), std::make_pair("dbl_col", dblvec));
 
-    // Do various Normalize testing
-    //
-    NormalizeVisitor<double, unsigned long, 64> norm_v;  // min_max method
-    auto                                        result =
+    NormalizeVisitor<double, unsigned long, 64>    norm_v;
+    StandardizeVisitor<double, unsigned long, 64>  stand_v;
+    auto                        result =
         df.single_act_visit<double>("dbl_col", norm_v).get_result();
-    StlVecType<double>                          norm_result = {
+    StlVecType<double>         norm_result = {
         0.078603, 0.142743, 0.206882, 0.271022, 0.335161, 0.191841, 0.0635559,
         0.640818, 0.272016, 0, 0.512539, 0.141954, 0.213219, 1, 0.704958,
         0.336155, 0.0641396, 0.134821, 0.576679, 0.206093, 0.277359, 0.769098,
         0.400295, 0.128279, 0.198961, 0.640818, 0.270233, 0.341498,
     };
-    double                                      sum { 0 };
+    StlVecType<double>         stand_result = {
+        -1.00542, -0.744444, -0.48347, -0.222497, 0.0384758, -0.544669,
+        -1.06664, 1.28214, -0.218452, -1.32524, 0.760197, -0.747654, -0.457686,
+        2.74359, 1.54312, 0.0425209, -1.06427, -0.776674, 1.02117, -0.48668,
+        -0.196713, 1.80409, 0.303494, -0.803293, -0.515701, 1.28214, -0.225707,
+        0.06426
+    };
 
     for (size_t i = 0; i < result.size(); ++i)
        assert(fabs(result[i] - norm_result[i]) < 0.00001);
-    for (const auto &r : result)
-        sum += r;
-    assert(fabs(sum - 9.11974) < 0.00001);
-
-    //
-    NormalizeVisitor<double, unsigned long, 64> norm_simple {
-        normalization_type::simple
-    };
-    StlVecType<double>                          result_simple = {
-        0.00866693, 0.0156875, 0.0227081, 0.0297287, 0.0367493, 0.0210618,
-        0.0070199, 0.070206, 0.0298376, 6.31854e-05, 0.0561648, 0.0156012,
-        0.0234018, 0.109521, 0.0772266, 0.0368582, 0.00708379, 0.0148205,
-        0.0631854, 0.0226218, 0.0304224, 0.0842472, 0.0438788, 0.0141044,
-        0.0218411, 0.070206, 0.0296424, 0.037443
-    };
-
-    result = df.single_act_visit<double>("dbl_col", norm_simple).get_result();
-    for (size_t i = 0; i < result.size(); ++i)
-       assert(fabs(result[i] - result_simple[i]) < 0.00001);
-    sum = 0;
-    for (const auto &r : result)
-        sum += r;
-    assert(sum == 1.0);
-
-    //
-    NormalizeVisitor<double, unsigned long, 64> norm_euclidean {
-        normalization_type::euclidean
-    };
-    StlVecType<double>                          result_euclidean = {
-        0.0368709, 0.0667379, 0.0966049, 0.126472, 0.156339, 0.0896011,
-        0.029864, 0.29867, 0.126935, 0.000268803, 0.238936, 0.0663705,
-        0.0995558, 0.465926, 0.328537, 0.156802, 0.0301358, 0.0630493,
-        0.268803, 0.0962376, 0.129423, 0.358404, 0.186669, 0.0600029,
-        0.0929163, 0.29867, 0.126105, 0.15929
-    };
-
-    result =
-        df.single_act_visit<double>("dbl_col", norm_euclidean).get_result();
-    for (size_t i = 0; i < result.size(); ++i)
-       assert(fabs(result[i] - result_euclidean[i]) < 0.00001);
-    sum = 0;
-    for (const auto &r : result)
-        sum += r;
-    assert(fabs(sum - 4.2542) < 0.0001);
-
-    //
-    NormalizeVisitor<double, unsigned long, 64> norm_maxi {
-        normalization_type::maxi
-    };
-    StlVecType<double>                          result_maxi = {
-        0.0791346, 0.143237, 0.20734, 0.271442, 0.335545, 0.192308, 0.0640962,
-        0.641026, 0.272436, 0.000576923, 0.512821, 0.142449, 0.213673, 1,
-        0.705128, 0.336538, 0.0646795, 0.135321, 0.576923, 0.206551, 0.277776,
-        0.769231, 0.400641, 0.128782, 0.199423, 0.641026, 0.270654, 0.341878
-    };
-
-    result = df.single_act_visit<double>("dbl_col", norm_maxi).get_result();
-    for (size_t i = 0; i < result.size(); ++i)
-       assert(fabs(result[i] - result_maxi[i]) < 0.00001);
-    sum = 0;
-    for (const auto &r : result)
-        sum += r;
-    assert(fabs(sum - 9.13063) < 0.00001);
-
-    //
-    NormalizeVisitor<double, unsigned long, 64> norm_z_score {
-        normalization_type::z_score
-    };
-    StlVecType<double>                          result_z_score = {
-        -1.00542, -0.744444, -0.48347, -0.222497, 0.0384758, -0.544669,
-        -1.06664, 1.28214, -0.218452, -1.32524, 0.760197, -0.747654, -0.457686,
-        2.74359, 1.54312, 0.0425209, -1.06427, -0.776674, 1.02117, -0.48668,
-        -0.196713, 1.80409, 0.303494, -0.803293, -0.515701, 1.28214, -0.225707,
-        0.06426
-    };
-
-    result = df.single_act_visit<double>("dbl_col", norm_z_score).get_result();
-    for (size_t i = 0; i < result.size(); ++i)
-       assert(fabs(result[i] - result_z_score[i]) < 0.00001);
-    sum = 0;
-    for (const auto &r : result)
-        sum += r;
-    assert(fabs(sum - 0.0) < 0.000000000001);
-
-    //
-    NormalizeVisitor<double, unsigned long, 64> norm_decimal_scaling {
-        normalization_type::decimal_scaling
-    };
-    StlVecType<double>                          result_decimal_scaling = {
-        0.00791346, 0.0143237, 0.020734, 0.0271442, 0.0335545, 0.0192308,
-        0.00640962, 0.0641026, 0.0272436, 5.76923e-05, 0.0512821, 0.0142449,
-        0.0213673, 0.1, 0.0705128, 0.0336538, 0.00646795, 0.0135321, 0.0576923,
-        0.0206551, 0.0277776, 0.0769231, 0.0400641, 0.0128782, 0.0199423,
-        0.0641026, 0.0270654, 0.0341878
-    };
-
-    result = df.single_act_visit<double>("dbl_col",
-                                         norm_decimal_scaling).get_result();
-    for (size_t i = 0; i < result.size(); ++i)
-       assert(fabs(result[i] - result_decimal_scaling[i]) < 0.00001);
-    sum = 0;
-    for (const auto &r : result)
-        sum += r;
-    assert(fabs(sum - 0.91306) < 0.00001);
-
-    //
-    NormalizeVisitor<double, unsigned long, 64> norm_log_transform {
-        normalization_type::log_transform
-    };
-    StlVecType<double>                          result_log_transform = {
-        0.210666, 0.804017, 1.17387, 1.44327, 1.65527, 1.09861, -0.000100005,
-        2.30259, 1.44692, -4.71053, 2.07944, 0.798498, 1.20396, 2.74727,
-        2.3979, 1.65823, 0.00895974, 0.747162, 2.19722, 1.17006, 1.46633,
-        2.48491, 1.83258, 0.697637, 1.13494, 2.30259, 1.44036, 1.67397
-    };
-
-    result = df.single_act_visit<double>("dbl_col",
-                                         norm_log_transform).get_result();
-    for (size_t i = 0; i < result.size(); ++i)
-       assert(fabs(result[i] - result_log_transform[i]) < 0.00001);
-    sum = 0;
-    for (const auto &r : result)
-        sum += r;
-    assert(fabs(sum - 33.4666) < 0.0001);
-
-    //
-    NormalizeVisitor<double, unsigned long, 64> norm_root_transform {
-        normalization_type::root_transform
-    };
-    StlVecType<double>                          result_root_transform = {
-        1.11108, 1.49482, 1.79847, 2.05779, 2.2879, 1.73205, 0.99995, 3.16228,
-        2.06155, 0.0948683, 2.82843, 1.4907, 1.82573, 3.94968, 3.31662,
-        2.29129, 1.00449, 1.45293, 3, 1.79505, 2.08166, 3.4641, 2.5, 1.41739,
-        1.7638, 3.16228, 2.0548, 2.30939
-    };
-
-    result = df.single_act_visit<double>("dbl_col",
-                                         norm_root_transform).get_result();
-    for (size_t i = 0; i < result.size(); ++i)
-       assert(fabs(result[i] - result_root_transform[i]) < 0.00001);
-    sum = 0;
-    for (const auto &r : result)
-        sum += r;
-    assert(fabs(sum - 58.5091) < 0.0001);
-
-    // Now do Standardize testing
-    //
-    StandardizeVisitor<double, unsigned long, 64>   stand_v;
-    StlVecType<double>                              stand_result = {
-        -1.00542, -0.744444, -0.48347, -0.222497, 0.0384758, -0.544669,
-        -1.06664, 1.28214, -0.218452, -1.32524, 0.760197, -0.747654, -0.457686,
-        2.74359, 1.54312, 0.0425209, -1.06427, -0.776674, 1.02117, -0.48668,
-        -0.196713, 1.80409, 0.303494, -0.803293, -0.515701, 1.28214, -0.225707,
-        0.06426
-    };
-
     result = df.single_act_visit<double>("dbl_col", stand_v).get_result();
     for (size_t i = 0; i < result.size(); ++i)
        assert(fabs(result[i] - stand_result[i]) < 0.00001);
@@ -2005,14 +1852,14 @@ static void test_CubicSplineFitVisitor()  {
     const auto  &d_vec = csp_v1.get_d_vec();
 
     for (size_t i = 0; i < result1.size(); ++i)
-        std::cout << result1[i] << ", ";
-    std::cout << std::endl;
+		std::cout << result1[i] << ", ";
+	std::cout << std::endl;
     for (size_t i = 0; i < c_vec.size(); ++i)
-        std::cout << c_vec[i] << ", ";
-    std::cout << std::endl;
+		std::cout << c_vec[i] << ", ";
+	std::cout << std::endl;
     for (size_t i = 0; i < d_vec.size(); ++i)
-        std::cout << d_vec[i] << ", ";
-    std::cout << std::endl;
+		std::cout << d_vec[i] << ", ";
+	std::cout << std::endl;
 }
 
 // -----------------------------------------------------------------------------
@@ -2388,18 +2235,18 @@ static void test_LowessVisitor()  {
     df.single_act_visit<double, double>("dep_var", "indep_var", l_v);
 
     auto    actual_yfit = StlVecType<double> {
-       67.988, 119.351, 122.673, 135.574, 142.677, 165.901, 169.442, 185.5469,
-       185.946, 191.751, 197.912, 202.10997, 206.052, 214.933, 216.473,
-       220.319, 226.653, 229.068, 229.203, 230.054, 231.714,
+        68.1432, 119.432, 122.75, 135.633, 142.724, 165.905, 169.447, 185.617,
+        186.017, 191.865, 198.03, 202.234, 206.178, 215.053, 216.586, 220.408,
+        226.671, 229.052, 229.185, 230.023, 231.657,
     };
 
     for (size_t idx = 0; idx < actual_yfit.size(); ++idx)
         assert(fabs(l_v.get_result()[idx] - actual_yfit[idx]) < 0.001);
 
     auto    actual_weights = StlVecType<double> {
-        0.665908, 0.674181, 0.945216, 0.873828, 0.991117, 0.973495, 0.934069,
-        0.909536, 0.923308, 0.928475, 0.863709, 0.837148, 0.612762, 0.948307,
-        0.951239, 0.998073, 0.99984, 0.991830, 0.993602, 0.974109, 0.990844,
+        0.641773, 0.653544, 0.940738, 0.865302, 0.990575, 0.971522, 0.92929,
+        0.902444, 0.918228, 0.924041, 0.855054, 0.824388, 0.586045, 0.945216,
+        0.94831, 0.998031, 0.999834, 0.991263, 0.993165, 0.972067, 0.990308,
     };
 
     for (size_t idx = 0; idx < actual_weights.size(); ++idx)
@@ -2942,12 +2789,11 @@ static void test_GarmanKlassVolVisitor()  {
         assert(gkv_v.get_result().size() == 5031);
         assert(std::isnan(gkv_v.get_result()[0]));
         assert(std::isnan(gkv_v.get_result()[28]));
-        assert(std::isnan(gkv_v.get_result()[29]));
-        assert(std::abs(gkv_v.get_result()[30] - 0.392054) < 0.00001);
-        assert(std::abs(gkv_v.get_result()[35] - 0.401494) < 0.00001);
-        assert(std::abs(gkv_v.get_result()[5030] - 0.227894) < 0.00001);
-        assert(std::abs(gkv_v.get_result()[5027] - 0.221514) < 0.00001);
-        assert(std::abs(gkv_v.get_result()[5022] - 0.216817) < 0.00001);
+        assert(std::abs(gkv_v.get_result()[29] - 0.392054) < 0.00001);
+        assert(std::abs(gkv_v.get_result()[34] - 0.401494) < 0.00001);
+        assert(std::abs(gkv_v.get_result()[5030] - 0.230028) < 0.00001);
+        assert(std::abs(gkv_v.get_result()[5026] - 0.221514) < 0.00001);
+        assert(std::abs(gkv_v.get_result()[5021] - 0.216817) < 0.00001);
     }
     catch (const DataFrameError &ex)  {
         std::cout << ex.what() << std::endl;
@@ -2971,15 +2817,13 @@ static void test_YangZhangVolVisitor()  {
             ("FORD_Low", "FORD_High", "FORD_Open", "FORD_Close", yz_v);
 
         assert(yz_v.get_result().size() == 12265);
-		std::cout << std::endl;
         assert(std::isnan(yz_v.get_result()[0]));
         assert(std::isnan(yz_v.get_result()[29]));
-        assert(std::isnan(yz_v.get_result()[30]));
-        assert(std::abs(yz_v.get_result()[31] - 0.169461) < 0.00001);
-        assert(std::abs(yz_v.get_result()[36] - 0.181149) < 0.00001);
-        assert(std::abs(yz_v.get_result()[12264] - 0.281531) < 0.00001);
-        assert(std::abs(yz_v.get_result()[12261] - 0.279347) < 0.00001);
-        assert(std::abs(yz_v.get_result()[12256] - 0.293528) < 0.00001);
+        assert(std::abs(yz_v.get_result()[30] - 0.169461) < 0.00001);
+        assert(std::abs(yz_v.get_result()[35] - 0.181149) < 0.00001);
+        assert(std::abs(yz_v.get_result()[12264] - 0.292034) < 0.00001);
+        assert(std::abs(yz_v.get_result()[12260] - 0.279347) < 0.00001);
+        assert(std::abs(yz_v.get_result()[12255] - 0.293528) < 0.00001);
     }
     catch (const DataFrameError &ex)  {
         std::cout << ex.what() << std::endl;
@@ -3105,8 +2949,6 @@ static void test_no_index_reads()  {
                  unsigned long,
                  double,
                  bool,
-                 char,
-                 unsigned char,
                  std::string>(std::cout, io_format::csv2);
 
         std::cout << '\n' << std::endl;
@@ -3118,14 +2960,6 @@ static void test_no_index_reads()  {
                   unsigned long,
                   double,
                   bool,
-                  char,
-                  unsigned char,
-                  std::map<std::string, double>,
-                  std::unordered_map<std::string, double>,
-                  std::vector<std::string>,
-                  std::set<double>,
-                  std::set<std::string>,
-                  std::vector<double>,
                   std::string>(std::cout, io_format::csv2);
 
         std::cout << '\n' << std::endl;
@@ -3133,9 +2967,10 @@ static void test_no_index_reads()  {
         df3.read("data/sample_data_2.json", io_format::json, true);
         df3.read("data/sample_data_no_index.json", io_format::json, true);
         df3.write<std::ostream,
+                  int,
+                  unsigned long,
                   double,
-                  char,
-                  unsigned char,
+                  bool,
                   std::string>(std::cout, io_format::csv2);
     }
     catch (const DataFrameError &ex)  {
@@ -4231,6 +4066,7 @@ static void test_OnBalanceVolumeVisitor()  {
     }
 }
 
+
 // -----------------------------------------------------------------------------
 
 static void test_TrueRangeVisitor()  {
@@ -5157,8 +4993,6 @@ static void test_get_view_by_idx_values()  {
 // -----------------------------------------------------------------------------
 
 int main(int, char *[]) {
-
-    MyDataFrame::set_optimum_thread_level();
 
     test_get_reindexed();
     test_get_reindexed_view();

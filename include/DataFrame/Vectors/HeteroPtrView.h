@@ -30,6 +30,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <DataFrame/Vectors/VectorPtrView.h>
+#include <DataFrame/DataFrameExports.h>
 
 #include <functional>
 #include <new>
@@ -48,7 +49,7 @@ struct HeteroPtrView {
 
     using size_type = size_t;
 
-    HeteroPtrView();
+    HMDF_API HeteroPtrView();
     template<typename T>
     HeteroPtrView(T *begin_ptr, T *end_ptr);
 
@@ -68,18 +69,18 @@ struct HeteroPtrView {
     HeteroPtrView(VectorPtrView<T, A> &vec);
     template<typename T>
     HeteroPtrView(VectorPtrView<T, A> &&vec);
-    HeteroPtrView(const HeteroPtrView &that);
-    HeteroPtrView(HeteroPtrView &&that);
+    HMDF_API HeteroPtrView(const HeteroPtrView &that);
+    HMDF_API HeteroPtrView(HeteroPtrView &&that);
 
     ~HeteroPtrView() { clear(); }
 
-    HeteroPtrView &operator= (const HeteroPtrView &rhs);
-    HeteroPtrView &operator= (HeteroPtrView &&rhs);
+    HMDF_API HeteroPtrView &operator= (const HeteroPtrView &rhs);
+    HMDF_API HeteroPtrView &operator= (HeteroPtrView &&rhs);
 
     template<typename T>
-    [[nodiscard]] VectorPtrView<T, A> &get_vector();
+    VectorPtrView<T, A> &get_vector();
     template<typename T>
-    [[nodiscard]] const VectorPtrView<T, A> &get_vector() const;
+    const VectorPtrView<T, A> &get_vector() const;
 
     template<typename T>
     void reserve (size_type r)  { get_vector<T>().reserve (r); }
@@ -87,27 +88,28 @@ struct HeteroPtrView {
     void shrink_to_fit () { get_vector<T>().shrink_to_fit (); }
 
     template<typename T>
-    [[nodiscard]] size_type size () const { return (get_vector<T>().size()); }
+    typename VectorPtrView<T, A>::
+    size_type size () const { return (get_vector<T>().size()); }
 
-    void clear();
+    HMDF_API void clear();
 
     template<typename T>
-    [[nodiscard]] bool empty() const noexcept;
+    bool empty() const noexcept;
 
     template<typename T>
     T &at(size_type idx);
     template<typename T>
-    [[nodiscard]] const T &at(size_type idx) const;
+    const T &at(size_type idx) const;
 
     template<typename T>
-    [[nodiscard]] T &back();
+    T &back();
     template<typename T>
-    [[nodiscard]] const T &back() const;
+    const T &back() const;
 
     template<typename T>
-    [[nodiscard]] T &front();
+    T &front();
     template<typename T>
-    [[nodiscard]] const T &front() const;
+    const T &front() const;
 
     template<typename... Ts>
     struct type_list  {   };

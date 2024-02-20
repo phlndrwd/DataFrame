@@ -73,39 +73,13 @@ DataFrame<I, H>::shrink_to_fit_functor_<Ts ...>::operator() (T &vec) const  {
 
 template<typename I, typename H>
 template<typename ... Ts>
-template<typename T>
-void
-DataFrame<I, H>::remove_column_functor_<Ts ...>::operator() (T &) const  {
-
-    using value_type = typename T::value_type;
-
-    df.remove_column<value_type>(col_name);
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename ... Ts>
 template<typename T2>
 void
 DataFrame<I, H>::sort_functor_<Ts ...>::operator() (T2 &vec)  {
 
-    _sort_by_sorted_index_(vec, sorted_idxs, done_vec, idx_s);
+    sorted_idxs_copy = sorted_idxs;
+    _sort_by_sorted_index_(vec, sorted_idxs_copy, idx_s);
     return;
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename LHS, typename ... Ts>
-template<typename T>
-void
-DataFrame<I, H>::create_col_functor_<LHS, Ts ...>::operator() (const T &)  {
-
-    using VecType = typename std::remove_reference<T>::type;
-    using ValueType = typename VecType::value_type;
-
-    df.template create_column<ValueType>(name, false);
 }
 
 // ----------------------------------------------------------------------------
@@ -205,7 +179,35 @@ DataFrame<I, H>::print_csv_functor_<Ts ...>::operator() (const T &vec)  {
     using VecType = typename std::remove_reference<T>::type;
     using ValueType = typename VecType::value_type;
 
-    _write_csv_df_header_<std::ostream, ValueType>(os, name, vec.size()) << ':';
+    os << name << ':' << vec.size() << ':';
+    if (typeid(ValueType) == typeid(float))
+        os << "<float>:";
+    else if (typeid(ValueType) == typeid(double))
+        os << "<double>:";
+    else if (typeid(ValueType) == typeid(short int))
+        os << "<short>:";
+    else if (typeid(ValueType) == typeid(unsigned short int))
+        os << "<ushort>:";
+    else if (typeid(ValueType) == typeid(int))
+        os << "<int>:";
+    else if (typeid(ValueType) == typeid(unsigned int))
+        os << "<uint>:";
+    else if (typeid(ValueType) == typeid(long int))
+        os << "<long>:";
+    else if (typeid(ValueType) == typeid(long long int))
+        os << "<longlong>:";
+    else if (typeid(ValueType) == typeid(unsigned long int))
+        os << "<ulong>:";
+    else if (typeid(ValueType) == typeid(unsigned long long int))
+        os << "<ulonglong>:";
+    else if (typeid(ValueType) == typeid(std::string))
+        os << "<string>:";
+    else if (typeid(ValueType) == typeid(bool))
+        os << "<bool>:";
+    else if (typeid(ValueType) == typeid(DateTime))
+        os << "<DateTime>:";
+    else
+        os << "<N/A>:";
 
     const long  vec_size = vec.size();
     const long  sr = std::min(start_row, vec_size);
@@ -213,7 +215,7 @@ DataFrame<I, H>::print_csv_functor_<Ts ...>::operator() (const T &vec)  {
 
     if (vec_size > 0)  {
         for (long i = sr; i < er; ++i)
-            _write_csv_df_index_(os, vec[i]) << ',';
+            os << vec[i] << ',';
     }
     os << '\n';
 
@@ -236,7 +238,35 @@ DataFrame<I, H>::print_json_functor_<Ts ...>::operator() (const T &vec)  {
     if (need_pre_comma)
         os << ",\n";
 
-    _write_json_df_header_<std::ostream, ValueType>(os, name, vec.size());
+    os << '"' << name << "\":{\"N\":" << vec.size() << ',';
+    if (typeid(ValueType) == typeid(float))
+        os << "\"T\":\"float\",";
+    else if (typeid(ValueType) == typeid(double))
+        os << "\"T\":\"double\",";
+    else if (typeid(ValueType) == typeid(short int))
+        os << "\"T\":\"short\",";
+    else if (typeid(ValueType) == typeid(unsigned short int))
+        os << "\"T\":\"ushort\",";
+    else if (typeid(ValueType) == typeid(int))
+        os << "\"T\":\"int\",";
+    else if (typeid(ValueType) == typeid(unsigned int))
+        os << "\"T\":\"uint\",";
+    else if (typeid(ValueType) == typeid(long int))
+        os << "\"T\":\"long\",";
+    else if (typeid(ValueType) == typeid(long long int))
+        os << "\"T\":\"longlong\",";
+    else if (typeid(ValueType) == typeid(unsigned long int))
+        os << "\"T\":\"ulong\",";
+    else if (typeid(ValueType) == typeid(unsigned long long int))
+        os << "\"T\":\"ulonglong\",";
+    else if (typeid(ValueType) == typeid(std::string))
+        os << "\"T\":\"string\",";
+    else if (typeid(ValueType) == typeid(bool))
+        os << "\"T\":\"bool\",";
+    else if (typeid(ValueType) == typeid(DateTime))
+        os << "\"T\":\"DateTime\",";
+    else
+        os << "\"T\":\"N/A\",";
 
     const long  vec_size = vec.size();
     const long  sr = std::min(start_row, vec_size);
@@ -266,8 +296,9 @@ print_csv2_header_functor_<S, Ts ...>::operator() (const T &vec)  {
     using VecType = typename std::remove_reference<T>::type;
     using ValueType = typename VecType::value_type;
 
-    _write_csv_df_header_<S, ValueType>(
-        os, name, std::min(col_size, long(vec.size())));
+    _write_csv2_df_header_<S, ValueType>(os,
+                                         name,
+                                         std::min(col_size, long(vec.size())));
     return;
 }
 
@@ -279,7 +310,7 @@ template<typename T>
 void DataFrame<I, H>::
 print_csv2_data_functor_<S, Ts ...>::operator() (const T &vec)  {
 
-    if (vec.size() > index)  _write_csv_df_index_(os, vec[index]);
+    if (vec.size() > index)  os << vec[index];
     return;
 }
 
@@ -297,7 +328,7 @@ equal_functor_<Ts ...>::operator() (const T &lhs_vec)  {
 
     const auto  &iter = df.column_tb_.find(name);
 
-    if (iter == df.column_tb_.end()) [[unlikely]]  {
+    if (iter == df.column_tb_.end())  {
         result = false;
         return;
     }
@@ -329,27 +360,6 @@ mod_by_idx_functor_<Ts ...>::operator() (T &lhs_vec) const  {
 
         lhs_vec[lhs_idx] = rhs_vec[rhs_idx];
     }
-}
-
-// ----------------------------------------------------------------------------
-
-template<typename I, typename H>
-template<typename LHS, typename ... Ts>
-template<typename T>
-void
-DataFrame<I, H>::
-create_join_common_col_functor_<LHS, Ts ...>::operator() (const T &)  {
-
-    using VecType = typename std::remove_reference<T>::type;
-    using ValueType = typename VecType::value_type;
-
-    char    lhs_str[256];
-    char    rhs_str[256];
-
-    ::snprintf(lhs_str, sizeof(lhs_str) - 1, "lhs.%s", name);
-    ::snprintf(rhs_str, sizeof(rhs_str) - 1, "rhs.%s", name);
-    df.template create_column<ValueType>(lhs_str, false);
-    df.template create_column<ValueType>(rhs_str, false);
 }
 
 // ----------------------------------------------------------------------------
@@ -442,7 +452,7 @@ operator()(const T &vec)  {
 
         std::copy(vec.begin(), vec.end(), res_vec.begin() + original_index_s);
         result.template load_column<ValueType>(name,
-                                               std::move(res_vec),
+                                               res_vec,
                                                nan_policy::pad_with_nans,
                                                false);
     }
@@ -569,17 +579,7 @@ DataFrame<I, H>::
 drop_missing_rows_functor_<Ts ...>::
 operator()(T &vec)  {
 
-    if (thread_level  > 2)
-        futures.emplace_back(
-            thr_pool_.dispatch(false,
-                               &DataFrame::drop_missing_rows_<T>,
-                               std::ref(vec),
-                               std::cref(missing_row_map),
-                               policy,
-                               threshold,
-                               col_num));
-    else
-        drop_missing_rows_(vec, missing_row_map, policy, threshold, col_num);
+    drop_missing_rows_(vec, missing_row_map, policy, threshold, col_num);
     return;
 }
 
@@ -618,7 +618,7 @@ operator() (const T &vec)  {
     const size_type         vec_size = vec.size();
 
     new_col.reserve(std::min(sel_indices.size(), vec_size));
-    for (auto citer : sel_indices) [[likely]]  {
+    for (auto citer : sel_indices)  {
         const size_type index =
             citer >= 0 ? citer : static_cast<IT>(indices_size) + citer;
 
@@ -653,7 +653,7 @@ operator() (T &vec)  {
     const size_type vec_size = vec.size();
 
     new_col.reserve(std::min(sel_indices.size(), vec_size));
-    for (auto citer : sel_indices) [[likely]]  {
+    for (auto citer : sel_indices)  {
         const size_type index =
             citer >= 0 ? citer : static_cast<IT>(indices_size) + citer;
 
@@ -741,7 +741,10 @@ DataFrame<I, H>::
 shuffle_functor_<Ts ...>::
 operator() (T &vec) const  {
 
-    std::shuffle(vec.begin(), vec.end(), g_);
+    std::random_device  rd;
+    std::mt19937        g(rd());
+
+    std::shuffle(vec.begin(), vec.end(), g);
     return;
 }
 
@@ -763,7 +766,7 @@ random_load_data_functor_<Ts ...>::operator() (const T &vec)  {
     size_type       prev_value { 0 };
 
     new_vec.reserve(n_rows);
-    for (size_type i = 0; i < n_rows; ++i) [[likely]]  {
+    for (size_type i = 0; i < n_rows; ++i)  {
         if (rand_indices[i] < vec_s)  {
             if (i == 0 || rand_indices[i] != prev_value)
                 new_vec.push_back(vec[rand_indices[i]]);
@@ -774,9 +777,9 @@ random_load_data_functor_<Ts ...>::operator() (const T &vec)  {
     }
 
     df.template load_column<ValueType>(name,
-                                       std::move(new_vec),
-                                       nan_policy::dont_pad_with_nans,
-                                       false);
+                              std::move(new_vec),
+                              nan_policy::dont_pad_with_nans,
+                              false);
     return;
 }
 
@@ -798,7 +801,7 @@ random_load_view_functor_<DF, Ts ...>::operator() (const T &vec) {
     size_type       prev_value { 0 };
 
     new_vec.reserve(n_rows);
-    for (size_type i = 0; i < n_rows; ++i) [[likely]]  {
+    for (size_type i = 0; i < n_rows; ++i)  {
         if (rand_indices[i] < vec_s)  {
             if (i == 0 || rand_indices[i] != prev_value)
                 new_vec.push_back(

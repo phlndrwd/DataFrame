@@ -8,11 +8,10 @@ BUILD_DEFINE = Linux_GCC64
 
 CXX = /usr/bin/g++
 
-# INCLUDES = -I/usr/include/c++/7 -I/usr/include
-INCLUDES =
+INCLUDES = -I/usr/include/c++/7 -I/usr/include
 
 LFLAGS =
-CXXFLAGS = -O3 $(INCLUDES) $(DEFINES) -std=c++2b
+CXXFLAGS = -O3 -fPIC $(INCLUDES) $(DEFINES) -std=c++17
 
 PLATFORM_LIBS = -lpthread -ldl -lm -lstdc++
 

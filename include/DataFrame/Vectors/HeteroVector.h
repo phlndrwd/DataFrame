@@ -29,6 +29,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
 
+#include <DataFrame/DataFrameExports.h>
 #include <DataFrame/Utils/AlignedAllocator.h>
 #include <DataFrame/Vectors/HeteroConstPtrView.h>
 #include <DataFrame/Vectors/HeteroConstView.h>
@@ -57,20 +58,19 @@ struct HeteroVector  {
 
     using size_type = size_t;
 
-    HeteroVector();
-    HeteroVector(const HeteroVector &that);
-    HeteroVector(HeteroVector &&that);
+    HMDF_API HeteroVector();
+    HMDF_API HeteroVector(const HeteroVector &that);
+    HMDF_API HeteroVector(HeteroVector &&that);
 
     ~HeteroVector() { clear(); }
 
-    HeteroVector &operator= (const HeteroVector &rhs);
-    HeteroVector &operator= (HeteroVector &&rhs);
+    HMDF_API HeteroVector &operator= (const HeteroVector &rhs);
+    HMDF_API HeteroVector &operator= (HeteroVector &&rhs);
 
     template<typename T>
-    [[nodiscard]] std::vector<T, typename allocator_declare<T, A>::type> &
-    get_vector();
+    std::vector<T, typename allocator_declare<T, A>::type> &get_vector();
     template<typename T>
-    [[nodiscard]] const std::vector<T, typename allocator_declare<T, A>::type> &
+    const std::vector<T, typename allocator_declare<T, A>::type> &
     get_vector() const;
 
     // It returns a view of the underlying vector.
@@ -79,17 +79,14 @@ struct HeteroVector  {
     // There is no const version of this method
     //
     template<typename T>
-    [[nodiscard]] HeteroView<A>
-    get_view(size_type begin = 0, size_type end = -1);
+    HeteroView<A> get_view(size_type begin = 0, size_type end = -1);
     template<typename T>
-    [[nodiscard]] HeteroConstView<A>
-    get_view(size_type begin = 0, size_type end = -1) const;
+    HeteroConstView<A> get_view(size_type begin = 0, size_type end = -1) const;
 
     template<typename T>
-    [[nodiscard]] HeteroPtrView<A>
-    get_ptr_view(size_type begin = 0, size_type end = -1);
+    HeteroPtrView<A> get_ptr_view(size_type begin = 0, size_type end = -1);
     template<typename T>
-    [[nodiscard]] HeteroConstPtrView<A>
+    HeteroConstPtrView<A>
     get_ptr_view(size_type begin = 0, size_type end = -1) const;
 
     template<typename T>
@@ -105,9 +102,9 @@ struct HeteroVector  {
     void shrink_to_fit () { get_vector<T>().shrink_to_fit (); }
 
     template<typename T>
-    [[nodiscard]] size_type size () const { return (get_vector<T>().size()); }
+    size_type size () const { return (get_vector<T>().size()); }
 
-    void clear();
+    HMDF_API void clear();
 
     template<typename T>
     void erase(size_type pos);
@@ -121,22 +118,22 @@ struct HeteroVector  {
     void pop_back();
 
     template<typename T>
-    [[nodiscard]] bool empty() const noexcept;
+    bool empty() const noexcept;
 
     template<typename T>
-    [[nodiscard]] T &at(size_type idx);
+    T &at(size_type idx);
     template<typename T>
-    [[nodiscard]] const T &at(size_type idx) const;
+    const T &at(size_type idx) const;
 
     template<typename T>
-    [[nodiscard]] T &back();
+    T &back();
     template<typename T>
-    [[nodiscard]] const T &back() const;
+    const T &back() const;
 
     template<typename T>
-    [[nodiscard]] T &front();
+    T &front();
     template<typename T>
-    [[nodiscard]] const T &front() const;
+    const T &front() const;
 
     template<typename T>
     using iterator =
@@ -144,7 +141,7 @@ struct HeteroVector  {
             std::vector<T, typename allocator_declare<T, A>::type>::iterator;
     template<typename T>
     using const_iterator =
-        typename
+	    typename
             std::vector<
                 T,
                 typename allocator_declare<T, A>::type>::const_iterator;

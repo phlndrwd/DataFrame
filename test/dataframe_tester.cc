@@ -33,7 +33,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <DataFrame/RandGen.h>
 
 #include <cassert>
-#include <chrono>
 #include <cmath>
 #include <iostream>
 #include <limits>
@@ -301,22 +300,17 @@ static void test_haphazard()  {
 
     std::cout << "\nTesting Correlation Visitor ..." << std::endl;
 
-    CorrVisitor<double> p_corr_visitor;
-    CorrVisitor<double> s_corr_visitor(correlation_type::spearman);
-    CorrVisitor<double> rev_p_corr_visitor;
-    
-    df.single_act_visit<double, double>("dbl_col", "dbl_col_2", s_corr_visitor);
-
-    auto            fut10 =
-        df.visit_async<double, double>("dbl_col", "dbl_col_2", p_corr_visitor);
-    auto            rev_fut10 =
+    CorrVisitor<double> corr_visitor;
+    CorrVisitor<double> rev_corr_visitor;
+    auto                fut10 =
+        df.visit_async<double, double>("dbl_col", "dbl_col_2", corr_visitor);
+    auto                rev_fut10 =
         df.visit_async<double, double>("dbl_col", "dbl_col_2",
-                                       rev_p_corr_visitor, true);
-    const double    corr = fut10.get().get_result();
-    const double    rev_corr = rev_fut10.get().get_result();
+                                       rev_corr_visitor, true);
+    const double        corr = fut10.get().get_result();
+    const double        rev_corr = rev_fut10.get().get_result();
 
     assert(fabs(corr - -0.358381) < 0.000001);
-    assert(fabs(s_corr_visitor.get_result() - -0.380952) < 0.000001);
     assert(fabs(rev_corr - -0.358381) < 0.000001);
 
     std::cout << "\nTesting Stats Visitor ..." << std::endl;
@@ -340,7 +334,7 @@ static void test_haphazard()  {
     assert(fabs(slr_visitor.get_intercept() - 0.602674) < 0.00001);
     assert(fabs(slr_visitor.get_corr() - -0.358381) < 0.00001);
     assert(fabs(df.visit<double, double>("dbl_col", "dbl_col_2",
-                                         p_corr_visitor).get_result() -
+                                         corr_visitor).get_result() -
                -0.358381) < 0.00001);
 
     std::cout << "\nTesting GROUPBY ..." << std::endl;
@@ -488,10 +482,8 @@ static void test_haphazard()  {
               std::string>(std::cout);
 
     MyDataFrame::set_thread_level(5);
-    std::this_thread::sleep_for(std::chrono::seconds(1)); // Give it a chance
     assert(MyDataFrame::get_thread_level() == 5);
     MyDataFrame::set_thread_level(0);
-    std::this_thread::sleep_for(std::chrono::seconds(1)); // Give it a chance
     assert(MyDataFrame::get_thread_level() == 0);
     MyDataFrame::set_thread_level(10);
 }
@@ -516,12 +508,6 @@ static void test_read()  {
                   int,
                   unsigned long,
                   double,
-                  std::map<std::string, double>,
-                  std::unordered_map<std::string, double>,
-                  std::vector<std::string>,
-                  std::set<double>,
-                  std::set<std::string>,
-                  std::vector<double>,
                   std::string,
                   bool>(std::cout);
 
@@ -538,14 +524,6 @@ static void test_read()  {
                       unsigned long,
                       double,
                       std::string,
-                      char,
-                      unsigned char,
-                      std::map<std::string, double>,
-                      std::unordered_map<std::string, double>,
-                      std::vector<std::string>,
-                      std::set<double>,
-                      std::set<std::string>,
-                      std::vector<double>,
                       bool>(std::cout);
 
     StdDataFrame<DateTime>  df_read_dt;
@@ -656,7 +634,7 @@ static void test_remove_column()  {
     StlVecType<int>            i1 = { 22, 23, 24, 25 };
     StlVecType<std::string>    s1 =
         { "11", "22", "33", "xx", "yy", "gg", "string" };
-    MyDataFrame                df;
+    MyDataFrame                 df;
 
     df.load_data(std::move(idx),
                  std::make_pair("col_1", d1),
@@ -666,10 +644,10 @@ static void test_remove_column()  {
                  std::make_pair("col_str", s1));
 
     df.write<std::ostream, double, int, std::string>(std::cout);
-    df.remove_column<double>("col_2");
+    df.remove_column("col_2");
     std::cout << "After removing column `col_2`" << std::endl;
     df.write<std::ostream, double, int, std::string>(std::cout);
-    df.remove_column<std::string>("col_str");
+    df.remove_column("col_str");
     std::cout << "After removing column `col_str`" << std::endl;
     df.write<std::ostream, double, int, std::string>(std::cout);
 
@@ -1276,8 +1254,6 @@ static void test_dataframe_friend_plus_operator()  {
                 int,
                 double,
                 std::string,
-                char,
-                unsigned char,
                 bool>(df1, df2);
 
     std::cout << "Original DF1:" << std::endl;
@@ -1286,8 +1262,6 @@ static void test_dataframe_friend_plus_operator()  {
               unsigned long,
               double,
               std::string,
-              char,
-              unsigned char,
               bool>(std::cout);
     std::cout << "Original DF2:" << std::endl;
     df2.write<std::ostream,
@@ -1295,8 +1269,6 @@ static void test_dataframe_friend_plus_operator()  {
               unsigned long,
               double,
               std::string,
-              char,
-              unsigned char,
               bool>(std::cout);
     std::cout << "Result DF:" << std::endl;
     result.write<std::ostream,
@@ -1304,8 +1276,6 @@ static void test_dataframe_friend_plus_operator()  {
                  unsigned long,
                  double,
                  std::string,
-                 char,
-                 unsigned char,
                  bool>(std::cout);
 }
 
@@ -1333,8 +1303,6 @@ static void test_dataframe_friend_minus_operator()  {
                  unsigned long,
                  int,
                  double,
-                 char,
-                 unsigned char,
                  bool>(df1, df2);
 
     std::cout << "Original DF1:" << std::endl;
@@ -1343,8 +1311,6 @@ static void test_dataframe_friend_minus_operator()  {
               unsigned long,
               double,
               std::string,
-              char,
-              unsigned char,
               bool>(std::cout);
     std::cout << "Original DF2:" << std::endl;
     df2.write<std::ostream,
@@ -1358,8 +1324,6 @@ static void test_dataframe_friend_minus_operator()  {
                  int,
                  unsigned long,
                  double,
-                 char,
-                 unsigned char,
                  bool>(std::cout);
 }
 
@@ -2162,7 +2126,7 @@ static void test_median()  {
     double                  result =
         df.single_act_visit<double>("dblcol_1", med_visit, true).get_result();
 
-    assert(result == 11.0);
+    assert(result == 10.0);
 
     result = df.single_act_visit<double>("dblcol_2", med_visit).get_result();
     assert(result == 10.50);
@@ -2171,30 +2135,10 @@ static void test_median()  {
     int                 result2 =
         df.single_act_visit<int>("intcol_1", med_visit2).get_result();
 
-    assert(result2 == 11);
+    assert(result2 == 10);
 
     result2 = df.single_act_visit<int>("intcol_2", med_visit2).get_result();
     assert(result2 == 10);
-
-    using TestDF = StdDataFrame<std::string>;
-
-    std::vector<std::string> syms = { "AAPL", "IBM", "TSLA", "MSFT", "CSCO" };
-    std::vector<double>      c1 = { 1.0, 2.0, 3.0, 4.0 };
-    std::vector<double>      c2 = { 0.01, 0.02, 0.03 };
-    std::vector<double>      c3 =
-        { 0.0, std::numeric_limits<double>::quiet_NaN(), 0.1 };
-    TestDF                   testDF ;
-
-    testDF.load_data(std::move(syms),
-                     std::make_pair("c1",  c1),
-                     std::make_pair("c2",  c2),
-                     std::make_pair("c3",  c3));
-
-    MedianVisitor<double, std::string>  md;
-
-    assert((testDF.single_act_visit<double>("c1", md).get_result() == 2.5));
-    assert((testDF.single_act_visit<double>("c2", md).get_result() == 0.02));
-    assert((testDF.single_act_visit<double>("c3", md).get_result() == 0.05));
 }
 
 // -----------------------------------------------------------------------------
@@ -2970,8 +2914,8 @@ static void test_SimpleRollAdopter()  {
     assert(std::isnan(result4[1]));
     assert(result4[2] == 10.0);
     assert(result4[3] == 11.0);
-    assert(result4[4] == 11.0);
-    assert(result4[8] == 16.0);
+    assert(std::isnan(result4[4]));
+    assert(std::isnan(result4[8]));
     assert(std::isnan(result4[9]));
     assert(result4[10] == 18.0);
 }
@@ -3361,13 +3305,6 @@ static void test_reading_writing_json()  {
         assert(df.get_column<double>("col_3").size() == 12);
         assert(df.get_column<double>("col_3")[3] == 18.0);
         assert(df.get_column<double>("col_3")[11] == 555.543);
-
-        assert(df.get_column<char>("col_char")[11] == 78);
-        assert(df.get_column<char>("col_char")[2] == 'F');
-        assert(df.get_column<char>("col_char")[8] == 'h');
-        assert(df.get_column<unsigned char>("col_uchar")[11] == 255);
-        assert(df.get_column<unsigned char>("col_uchar")[7] == 88);
-        assert(df.get_column<unsigned char>("col_uchar")[9] == '&');
     }
     catch (const DataFrameError &ex)  {
         std::cout << ex.what() << std::endl;
@@ -3602,7 +3539,7 @@ static void test_view_visitors()  {
 
     std::cout << "\nTesting View visitors ..." << std::endl;
 
-    MyDataFrame df;
+    MyDataFrame         df;
 
     StlVecType<unsigned long>  idxvec =
         { 1UL, 2UL, 3UL, 4UL, 5UL, 6UL, 7UL, 8UL, 9UL, 10UL };
@@ -3782,14 +3719,7 @@ static void test_k_means()  {
                  std::make_pair("col1",
                                 gen_lognormal_dist<double, 128>(item_cnt, p)));
 
-    KMeansVisitor<5,
-                  double,
-                  unsigned long,
-                  128>  km_visitor(1000, true,
-                                   [](const double &x, const double &y)  {
-                                       return ((x - y) * (x - y));
-                                   },
-                                   10);
+    KMeansVisitor<5, double, unsigned long, 128>    km_visitor(1000);
 
     df.single_act_visit<double>("col1", km_visitor);
     std::cout << "Means of clusters are: ";
@@ -3867,7 +3797,7 @@ static void test_k_means()  {
     KMeansVisitor<5,
                   Point,
                   unsigned long,
-                  128> km_visitor2(1000, true, point_distance, 10);
+                  128> km_visitor2(1000, true, point_distance);
 
     df.single_act_visit<Point>("point_col", km_visitor2);
 
@@ -3953,7 +3883,7 @@ static void test_affinity_propagation()  {
     StlVecType<double>     final_col;
     StlVecType<double>     col_data;
 
-    p.seed = 10U;
+    p.seed = 3575984165U;
 
     p.min_value = 0;
     p.max_value = 10;
@@ -3982,16 +3912,9 @@ static void test_affinity_propagation()  {
 
     df.load_data(MyDataFrame::gen_sequence_index(0, item_cnt * 5, 1),
                  std::make_pair("col1", final_col));
-    df.shuffle<double>({"col1"}, false, 10);
+    df.shuffle<double>({"col1"}, false);
 
-    KMeansVisitor<5,
-                  double,
-                  unsigned long,
-                  128>  km_visitor(1000, true,
-                                   [](const double &x, const double &y)  {
-                                       return ((x - y) * (x - y));
-                                   },
-                                   10);
+    KMeansVisitor<5, double, unsigned long, 128>    km_visitor(1000);
     AffinityPropVisitor<double, unsigned long, 128> ap_visitor(50);
 
     df.single_act_visit<double>("col1", km_visitor);
@@ -4191,6 +4114,8 @@ static void test_DoubleCrossOver()  {
 
     std::cout << "\nTesting DoubleCrossOver{ } ..." << std::endl;
 
+    MyDataFrame::set_thread_level(10);
+
     StlVecType<unsigned long>  idx =
         { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
           21, 22, 23, 24, 25, 26, 27, 28, 29, 31, 31, 32, 33, 34, 35, 36, 37,
@@ -4238,6 +4163,8 @@ static void test_DoubleCrossOver()  {
     assert(fabs(short_to_long[12] - -0.777842) < 0.00001);
     assert(fabs(short_to_long[39] - 0.573914) < 0.00001);
     assert(fabs(short_to_long[38] - -0.200639) < 0.00001);
+
+    MyDataFrame::set_thread_level(0);
 }
 
 // -----------------------------------------------------------------------------
@@ -4245,6 +4172,8 @@ static void test_DoubleCrossOver()  {
 static void test_BollingerBand()  {
 
     std::cout << "\nTesting BollingerBand{ } ..." << std::endl;
+
+    MyDataFrame::set_thread_level(10);
 
     StlVecType<unsigned long>  idx =
         { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
@@ -4280,6 +4209,8 @@ static void test_BollingerBand()  {
     assert(fabs(raw_to_lower[12] - 5.16228) < 0.00001);
     assert(fabs(raw_to_lower[38] - 1.88035) < 0.00001);
     assert(fabs(raw_to_lower[39] - 0.680351) < 0.00001);
+
+    MyDataFrame::set_thread_level(0);
 }
 
 // -----------------------------------------------------------------------------
@@ -5067,9 +4998,6 @@ static void test_concat()  {
 int main(int, char *[]) {
 
     test_haphazard();
-
-    MyDataFrame::set_optimum_thread_level();
-
     test_read();
     test_transpose();
     test_get_data_by_loc_slicing();

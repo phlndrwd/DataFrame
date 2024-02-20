@@ -115,35 +115,28 @@ DateTime::DateTime (DateType d,
 
 // ----------------------------------------------------------------------------
 
-// Supporting the following formats:
-
-//  (1)  YYYYMMDD
+// I'm adding the following formats:
+//
 // AME_STYLE:
-//  (2)  MM/DD/YYYY
-//  (3)  MM/DD/YYYY HH
-//  (4)  MM/DD/YYYY HH:MM
-//  (5)  MM/DD/YYYY HH:MM:SS
-//  (6)  MM/DD/YYYY HH:MM:SS.MMM  // Milliseconds
-//  (7)  MM/DD/YYYY HH:MM:SS.IIIIII  // Microseconds
-//  (8)  MM/DD/YYYY HH:MM:SS.NNNNNNNNN  // Nanoseconds
-
+//  (1)  MM/DD/YYYY
+//  (2)  MM/DD/YYYY HH
+//  (3)  MM/DD/YYYY HH:MM
+//  (4)  MM/DD/YYYY HH:MM:SS
+//  (5)  MM/DD/YYYY HH:MM:SS.MMM
+//
 // EUR_STYLE:
-//  (9)  YYYY/MM/DD
-//  (10) YYYY/MM/DD HH
-//  (11) YYYY/MM/DD HH:MM
-//  (12) YYYY/MM/DD HH:MM:SS
-//  (13) YYYY/MM/DD HH:MM:SS.MMM  // Milliseconds
-//  (14) YYYY/MM/DD HH:MM:SS.IIIIII  // Microseconds
-//  (15) YYYY/MM/DD HH:MM:SS.NNNNNNNNN  // Nanoseconds
-
+//  (1)  YYYY/MM/DD
+//  (2)  YYYY/MM/DD HH
+//  (3)  YYYY/MM/DD HH:MM
+//  (4)  YYYY/MM/DD HH:MM:SS
+//  (5)  YYYY/MM/DD HH:MM:SS.MMM
+//
 // ISO_STYLE:
-//  (16) YYYY-MM-DD
-//  (17) YYYY-MM-DD HH
-//  (18) YYYY-MM-DD HH:MM
-//  (19) YYYY-MM-DD HH:MM:SS
-//  (20) YYYY-MM-DD HH:MM:SS.MMM  // Milliseconds
-//  (21) YYYY-MM-DD HH:MM:SS.IIIIII  // Microseconds
-//  (22) YYYY-MM-DD HH:MM:SS.NNNNNNNNN  // Nanoseconds
+//  (12) YYYY-MM-DD
+//  (13) YYYY-MM-DD HH
+//  (14) YYYY-MM-DD HH:MM
+//  (15) YYYY-MM-DD HH:MM:SS
+//  (16) YYYY-MM-DD HH:MM:SS.MMM
 //
 DateTime::DateTime (const char *s, DT_DATE_STYLE ds, DT_TIME_ZONE tz)
     : time_zone_ (tz)  {
@@ -155,12 +148,8 @@ DateTime::DateTime (const char *s, DT_DATE_STYLE ds, DT_TIME_ZONE tz)
     if (ds == DT_DATE_STYLE::YYYYMMDD)
         *this = str;
     else  {
-        std::size_t str_len { 0 };
-
-        for (const char *c = str; *c != '\0' && *c != '+'; ++c)
-            str_len += 1;
-
-        int year { 0 }, month { 0 }, day { 0 };
+        const size_t    str_len = ::strlen (str);
+        int             year { 0 }, month { 0 }, day { 0 };
 
         hour_ = minute_ = second_ = nanosecond_ = 0;
         if (ds == DT_DATE_STYLE::AME_STYLE)  {
@@ -178,29 +167,12 @@ DateTime::DateTime (const char *s, DT_DATE_STYLE ds, DT_TIME_ZONE tz)
                 ::sscanf (str, "%d/%d/%d %hu:%hu:%hu",
                           &month, &day, &year, &hour_, &minute_, &second_);
             }
-            else if (str_len > 19 && str_len <= 23)  {
+            else if (str_len == 23)  {
                 MillisecondType ms { 0 };
 
                 ::sscanf (str, "%d/%d/%d %hu:%hu:%hu.%hd",
                           &month, &day, &year, &hour_, &minute_, &second_, &ms);
-                if (str_len <= 21)  ms *= 100;
-                else if (str_len == 22)  ms *= 10;
                 nanosecond_ = ms * 1000000;
-            }
-            else if (str_len > 23 && str_len <= 26)  {
-                MicrosecondType micros { 0 };
-
-                ::sscanf (str, "%d/%d/%d %hu:%hu:%hu.%d",
-                          &month, &day, &year,
-                          &hour_, &minute_, &second_, &micros);
-                if (str_len <= 24)  micros *= 100;
-                else if (str_len <= 25)  micros *= 10;
-                nanosecond_ = micros * 1000;
-            }
-            else if (str_len > 26)  {
-                ::sscanf (str, "%d/%d/%d %hu:%hu:%hu.%d",
-                          &month, &day, &year,
-                          &hour_, &minute_, &second_, &nanosecond_);
             }
         }
         else if (ds == DT_DATE_STYLE::EUR_STYLE)  {
@@ -218,29 +190,12 @@ DateTime::DateTime (const char *s, DT_DATE_STYLE ds, DT_TIME_ZONE tz)
                 ::sscanf (str, "%d/%d/%d %hu:%hu:%hu",
                           &year, &month, &day, &hour_, &minute_, &second_);
             }
-            else if (str_len > 19 && str_len <= 23)  {
+            else if (str_len == 23)  {
                 MillisecondType ms { 0 };
 
                 ::sscanf (str, "%d/%d/%d %hu:%hu:%hu.%hd",
                           &year, &month, &day, &hour_, &minute_, &second_, &ms);
-                if (str_len <= 21)  ms *= 100;
-                else if (str_len == 22)  ms *= 10;
                 nanosecond_ = ms * 1000000;
-            }
-            else if (str_len > 23 && str_len <= 26)  {
-                MicrosecondType micros { 0 };
-
-                ::sscanf (str, "%d/%d/%d %hu:%hu:%hu.%d",
-                          &year, &month, &day,
-                          &hour_, &minute_, &second_, &micros);
-                if (str_len <= 24)  micros *= 100;
-                else if (str_len <= 25)  micros *= 10;
-                nanosecond_ = micros * 1000;
-            }
-            else if (str_len > 26)  {
-                ::sscanf (str, "%d/%d/%d %hu:%hu:%hu.%d",
-                          &year, &month, &day,
-                          &hour_, &minute_, &second_, &nanosecond_);
             }
         }
         else if (ds == DT_DATE_STYLE::ISO_STYLE)  {
@@ -262,30 +217,21 @@ DateTime::DateTime (const char *s, DT_DATE_STYLE ds, DT_TIME_ZONE tz)
                           &year, &month, &day, &slug,
                           &hour_, &minute_, &second_);
             }
-            else if (str_len > 19 && str_len <= 23)  {
+            else if (str_len == 23)  {
                 MillisecondType millis { 0 };
 
                 ::sscanf (str, "%d-%d-%d%c%hu:%hu:%hu.%hd",
                           &year, &month, &day, &slug,
                           &hour_, &minute_, &second_, &millis);
-                if (str_len <= 21)  millis *= 100;
-                else if (str_len == 22)  millis *= 10;
                 nanosecond_ = millis * 1000000;
             }
-            else if (str_len > 23 && str_len <= 26)  {
+            else if (str_len > 23)  {
                 MicrosecondType micros { 0 };
 
                 ::sscanf (str, "%d-%d-%d%c%hu:%hu:%hu.%d",
                           &year, &month, &day, &slug,
                           &hour_, &minute_, &second_, &micros);
-                if (str_len <= 24)  micros *= 100;
-                else if (str_len <= 25)  micros *= 10;
                 nanosecond_ = micros * 1000;
-            }
-            else if (str_len > 26)  {
-                ::sscanf (str, "%d-%d-%d%c%hu:%hu:%hu.%d",
-                          &year, &month, &day, &slug,
-                          &hour_, &minute_, &second_, &nanosecond_);
             }
         }
         if (year == 0 && month == 0 && day == 0)  {
@@ -490,14 +436,6 @@ bool DateTime::is_us_business_day () const noexcept  {
                (year () == 2001 && mon == DT_MONTH::SEP && m_day >= 11 &&
                 m_day <= 14) ||
 
-               // Juneteenth holiday
-               // (June 19 or Monday, June 20 or Friday, June 18)
-               //
-               (year() >= 2021 &&
-                (m_day == 19 || (w_day == DT_WEEKDAY::MON && m_day == 20) ||
-                 (w_day == DT_WEEKDAY::FRI && m_day == 18)) &&
-                mon == DT_MONTH::JUN) ||
-
                // Martin Luther King Day (third Monday of January)
                //
                (w_day == DT_WEEKDAY::MON &&
@@ -516,7 +454,7 @@ bool DateTime::is_us_business_day () const noexcept  {
                // Independence Day (July 4 or Monday, July 5 or Friday, July 3)
                //
                ((m_day == 4 || (w_day == DT_WEEKDAY::MON && m_day == 5) ||
-                 (w_day == DT_WEEKDAY::FRI && m_day == 3)) &&
+                (w_day == DT_WEEKDAY::FRI && m_day == 3)) &&
                 mon == DT_MONTH::JUL) ||
 
                // Labor Day (first Monday of September)
@@ -1069,212 +1007,6 @@ DateTime::breaktime_ (EpochType the_time, NanosecondType nanosec) noexcept  {
     week_day_ = static_cast<DT_WEEKDAY>(ltime.tm_wday + 1);
 
     return;
-}
-
-// ----------------------------------------------------------------------------
-
-bool operator == (const DateTime &lhs, const DateTime &rhs) noexcept  {
-
-    return (lhs.compare(rhs) == 0);
-}
-
-// ----------------------------------------------------------------------------
-
-bool operator != (const DateTime &lhs, const DateTime &rhs) noexcept  {
-
-    return (lhs.compare(rhs) != 0);
-}
-
-// ----------------------------------------------------------------------------
-
-bool operator < (const DateTime &lhs, const DateTime &rhs) noexcept  {
-
-    return (lhs.compare(rhs) < 0);
-}
-
-// ----------------------------------------------------------------------------
-
-bool operator <= (const DateTime &lhs, const DateTime &rhs) noexcept  {
-
-    return (lhs.compare(rhs) <= 0);
-}
-
-// ----------------------------------------------------------------------------
-
-bool operator > (const DateTime &lhs, const DateTime &rhs) noexcept  {
-
-    return (lhs.compare(rhs) > 0);
-}
-
-// ----------------------------------------------------------------------------
-
-bool operator >= (const DateTime &lhs, const DateTime &rhs) noexcept  {
-
-    return (lhs.compare(rhs) >= 0);
-}
-
-// ----------------------------------------------------------------------------
-
-double operator + (const DateTime &lhs, const DateTime &rhs) noexcept  {
-
-    return (static_cast<double>(lhs) + static_cast<double>(rhs));
-}
-
-// ----------------------------------------------------------------------------
-
-double operator - (const DateTime &lhs, const DateTime &rhs) noexcept  {
-
-    return (static_cast<double>(lhs) - static_cast<double>(rhs));
-}
-
-// ----------------------------------------------------------------------------
-
-double operator * (const DateTime &lhs, const DateTime &rhs) noexcept  {
-
-    return (static_cast<double>(lhs) * static_cast<double>(rhs));
-}
-
-// ----------------------------------------------------------------------------
-
-double operator / (const DateTime &lhs, const DateTime &rhs) noexcept  {
-
-    return (static_cast<double>(lhs) / static_cast<double>(rhs));
-}
-
-// ----------------------------------------------------------------------------
-
-double operator + (const DateTime &lhs, double rhs) noexcept  {
-
-    return (static_cast<double>(lhs) + rhs);
-}
-
-// ----------------------------------------------------------------------------
-
-double operator - (const DateTime &lhs, double rhs) noexcept  {
-
-    return (static_cast<double>(lhs) - rhs);
-}
-
-// ----------------------------------------------------------------------------
-
-double operator * (const DateTime &lhs, double rhs) noexcept  {
-
-    return (static_cast<double>(lhs) * rhs);
-}
-
-// ----------------------------------------------------------------------------
-
-double operator / (const DateTime &lhs, double rhs) noexcept  {
-
-    return (static_cast<double>(lhs) / rhs);
-}
-
-// ----------------------------------------------------------------------------
-
-double operator + (double lhs, const DateTime &rhs) noexcept  {
-
-    return (lhs + static_cast<double>(rhs));
-}
-
-// ----------------------------------------------------------------------------
-
-double operator - (double lhs, const DateTime &rhs) noexcept  {
-
-    return (lhs - static_cast<double>(rhs));
-}
-
-// ----------------------------------------------------------------------------
-
-double operator * (double lhs, const DateTime &rhs) noexcept  {
-
-    return (lhs * static_cast<double>(rhs));
-}
-
-// ----------------------------------------------------------------------------
-
-double operator / (double lhs, const DateTime &rhs) noexcept  {
-
-    return (lhs / static_cast<double>(rhs));
-}
-
-// ----------------------------------------------------------------------------
-
-DateTime &operator += (DateTime &lhs, double rhs) noexcept  {
-
-    const double    new_time = static_cast<double>(lhs) + rhs;
-    const int       nano =
-        (new_time - static_cast<time_t>(new_time)) * 1000000000;
-
-    lhs.set_time(static_cast<time_t>(new_time), nano);
-    return (lhs);
-}
-
-// ----------------------------------------------------------------------------
-
-DateTime &operator -= (DateTime &lhs, double rhs) noexcept  {
-
-    const double    new_time = static_cast<double>(lhs) - rhs;
-    const int       nano =
-        (new_time - static_cast<time_t>(new_time)) * 1000000000;
-
-    lhs.set_time(static_cast<time_t>(new_time), nano);
-    return (lhs);
-}
-
-// ----------------------------------------------------------------------------
-
-DateTime &operator *= (DateTime &lhs, double rhs) noexcept  {
-
-    const double    new_time = static_cast<double>(lhs) * rhs;
-    const int       nano =
-        (new_time - static_cast<time_t>(new_time)) * 1000000000;
-
-    lhs.set_time(static_cast<time_t>(new_time), nano);
-    return (lhs);
-}
-
-// ----------------------------------------------------------------------------
-
-DateTime &operator /= (DateTime &lhs, double rhs) noexcept  {
-
-    const double    new_time = static_cast<double>(lhs) / rhs;
-    const int       nano =
-        (new_time - static_cast<time_t>(new_time)) * 1000000000;
-
-    lhs.set_time(static_cast<time_t>(new_time), nano);
-    return (lhs);
-}
-
-// ----------------------------------------------------------------------------
-
-double &operator += (double &lhs, const DateTime &rhs) noexcept  {
-
-    lhs += static_cast<double>(rhs);
-    return (lhs);
-}
-
-// ----------------------------------------------------------------------------
-
-double &operator -= (double &lhs, const DateTime &rhs) noexcept  {
-
-    lhs -= static_cast<double>(rhs);
-    return (lhs);
-}
-
-// ----------------------------------------------------------------------------
-
-double &operator *= (double &lhs, const DateTime &rhs) noexcept  {
-
-    lhs *= static_cast<double>(rhs);
-    return (lhs);
-}
-
-// ----------------------------------------------------------------------------
-
-double &operator /= (double &lhs, const DateTime &rhs) noexcept  {
-
-    lhs /= static_cast<double>(rhs);
-    return (lhs);
 }
 
 } // namespace hmdf

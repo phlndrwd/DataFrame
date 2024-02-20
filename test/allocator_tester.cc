@@ -27,13 +27,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <DataFrame/Utils/AlignedAllocator.h>
 
-#include <algorithm>
 #include <cassert>
-#include <cstdlib>
 #include <iostream>
-#include <map>
-#include <random>
-#include <string>
 #include <vector>
 
 using namespace hmdf;
@@ -46,13 +41,11 @@ struct MyData  {
     int i { 101 };
 };
 
+const std::size_t   NUM = 5;
+
 // -----------------------------------------------------------------------------
 
-static void test_aligned_allocator()  {
-
-    std::cout << "\nTesting AlignedAllocator ..." << std::endl;
-
-    const std::size_t   NUM = 5;
+int main(int, char *[]) {
 
     {
         AlignedAllocator<double>        a1;
@@ -60,10 +53,10 @@ static void test_aligned_allocator()  {
         AlignedAllocator<double, 512>   a3;
         AlignedAllocator<int, 512>      a4;
 
-        std::cout << "ai1 value: " << std::size_t(a1.align_value) << std::endl;
-        std::cout << "ai2 value: " << std::size_t(a2.align_value) << std::endl;
-        std::cout << "ai3 value: " << std::size_t(a3.align_value) << std::endl;
-        std::cout << "ai4 value: " << std::size_t(a4.align_value) << std::endl;
+        std::cout << "ai1 value: " << std::size_t(a1.align_value) << std::endl; 
+        std::cout << "ai2 value: " << std::size_t(a2.align_value) << std::endl; 
+        std::cout << "ai3 value: " << std::size_t(a3.align_value) << std::endl; 
+        std::cout << "ai4 value: " << std::size_t(a4.align_value) << std::endl; 
     }
     {
         std::vector<double, AlignedAllocator<double, 512>>  vec;
@@ -161,13 +154,6 @@ static void test_aligned_allocator()  {
         std::cout << std::endl;
     }
     */
-}
-
-// -----------------------------------------------------------------------------
-
-int main(int, char *[]) {
-
-    test_aligned_allocator();
 
     return (0);
 }

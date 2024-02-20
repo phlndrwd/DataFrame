@@ -30,6 +30,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <DataFrame/Vectors/VectorView.h>
+#include <DataFrame/DataFrameExports.h>
 
 #include <functional>
 #include <type_traits>
@@ -47,7 +48,7 @@ struct HeteroConstView  {
 
     using size_type = size_t;
 
-    HeteroConstView();
+    HMDF_API HeteroConstView();
     template<typename T>
     HeteroConstView(const T *begin_ptr, const T *end_ptr);
 
@@ -64,35 +65,36 @@ struct HeteroConstView  {
     template<typename T>
     void set_begin_end_special(const T *bp, const T *ep_1);
 
-    HeteroConstView(const HeteroConstView &that);
-    HeteroConstView(HeteroConstView &&that);
+    HMDF_API HeteroConstView(const HeteroConstView &that);
+    HMDF_API HeteroConstView(HeteroConstView &&that);
 
     ~HeteroConstView() { clear(); }
 
-    HeteroConstView &operator= (const HeteroConstView &rhs);
-    HeteroConstView &operator= (HeteroConstView &&rhs);
+    HMDF_API HeteroConstView &operator= (const HeteroConstView &rhs);
+    HMDF_API HeteroConstView &operator= (HeteroConstView &&rhs);
 
     template<typename T>
-    [[nodiscard]] VectorConstView<T, A> &get_vector();
+    VectorConstView<T, A> &get_vector();
     template<typename T>
-    [[nodiscard]] const VectorConstView<T, A> &get_vector() const;
+    const VectorConstView<T, A> &get_vector() const;
 
     template<typename T>
-    [[nodiscard]] size_type size () const { return (get_vector<T>().size()); }
+    typename VectorConstView<T, A>::size_type
+    size () const { return (get_vector<T>().size()); }
 
-    void clear();
-
-    template<typename T>
-    [[nodiscard]] bool empty() const noexcept;
+    HMDF_API void clear();
 
     template<typename T>
-    [[nodiscard]] const T &at(size_type idx) const;
+    bool empty() const noexcept;
 
     template<typename T>
-    [[nodiscard]] const T &back() const;
+    const T &at(size_type idx) const;
 
     template<typename T>
-    [[nodiscard]] const T &front() const;
+    const T &back() const;
+
+    template<typename T>
+    const T &front() const;
 
     template<typename T>
     using const_iterator = typename VectorConstView<T, A>::const_iterator;
@@ -101,13 +103,13 @@ struct HeteroConstView  {
         typename VectorConstView<T, A>::const_reverse_iterator;
 
     template<typename T>
-    [[nodiscard]] const_iterator<T> begin() const;
+    const_iterator<T> begin() const;
     template<typename T>
-    [[nodiscard]] const_iterator<T> end() const;
+    const_iterator<T> end() const;
     template<typename T>
-    [[nodiscard]] const_reverse_iterator<T> rbegin() const;
+    const_reverse_iterator<T> rbegin() const;
     template<typename T>
-    [[nodiscard]] const_reverse_iterator<T> rend() const;
+    const_reverse_iterator<T> rend() const;
 
     template<typename... Ts>
     struct type_list  {   };
@@ -137,10 +139,10 @@ private:
         typename allocator_declare<
             std::pair<const HeteroConstView *const,
                       VectorConstView<T, A>>, A>::type>
-        views_ {  };
+	    views_ {  };
 
     std::function<void(HeteroConstView &)>
-        clear_function_ {
+	    clear_function_ {
             [](HeteroConstView &) { return; }
         };
     std::function<void(const HeteroConstView &, HeteroConstView &)>

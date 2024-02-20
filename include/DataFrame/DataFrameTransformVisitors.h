@@ -30,6 +30,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
 #include <DataFrame/DataFrameStatsVisitors.h>
+#include <DataFrame/DataFrameTypes.h>
 
 #include <algorithm>
 #include <cassert>
@@ -71,54 +72,7 @@ struct  ClipVisitor  {
             count_ += 1;
         }
     }
-    template <forward_iterator K, forward_iterator H>
-    inline void
-    operator() (K idx_begin, K idx_end, H column_begin, H column_end) {
-
-        GET_COL_SIZE
-
-        if (col_s >= ThreadPool::MUL_THR_THHOLD &&
-            ThreadGranularity::get_thread_level() > 2)  {
-            auto    futures =
-                ThreadGranularity::thr_pool_.parallel_loop(
-                    size_type(0),
-                    col_s,
-                    [&column_begin, this]
-                    (auto begin, auto end) -> result_type  {
-                        result_type count { 0 };
-
-                        for (size_type i = begin; i < end; ++i)  {
-                            value_type  &val = *(column_begin + i);
-
-                            if (val > this->upper_)  {
-                                val = this->upper_;
-                                count += 1;
-                            }
-                            else if (val < this->lower_)  {
-                                val = this->lower_;
-                                count += 1;
-                            }
-                        }
-                        return (count);
-                    });
-
-            for (auto &fut : futures)  count_ += fut.get();
-        }
-        else  {
-            for (size_type i = 0; i < col_s; ++i)  {
-                value_type  &val = *(column_begin + i);
-
-                if (val > upper_)  {
-                    val = upper_;
-                    count_ += 1;
-                }
-                else if (val < lower_)  {
-                    val = lower_;
-                    count_ += 1;
-                }
-            }
-        }
-    }
+    PASS_DATA_ONE_BY_ONE
 
     DEFINE_PRE_POST_2
 
@@ -150,52 +104,6 @@ struct  AbsVisitor  {
         }
     }
     PASS_DATA_ONE_BY_ONE
-    template <forward_iterator K, forward_iterator H>
-    inline void
-    operator() (K idx_begin, K idx_end, H column_begin, H column_end) {
-
-        GET_COL_SIZE
-
-        if (col_s >= ThreadPool::MUL_THR_THHOLD &&
-            ThreadGranularity::get_thread_level() > 2)  {
-            auto    futures =
-                ThreadGranularity::thr_pool_.parallel_loop(
-                    size_type(0),
-                    col_s,
-                    [&column_begin]
-                    (auto begin, auto end) -> result_type  {
-                        result_type count { 0 };
-
-                        for (size_type i = begin; i < end; ++i)  {
-                            value_type  &val = *(column_begin + i);
-
-                            if (val < T(0))  {
-                                if constexpr (std::is_floating_point<T>::value)
-                                    val = std::fabs(val);
-                                else
-                                    val = std::abs(val);
-                                count += 1;
-                            }
-                        }
-                        return (count);
-                    });
-
-            for (auto &fut : futures)  count_ += fut.get();
-        }
-        else  {
-            for (size_type i = 0; i < col_s; ++i)  {
-                value_type  &val = *(column_begin + i);
-
-                if (val < T(0))  {
-                    if constexpr (std::is_floating_point<T>::value)
-                        val = std::fabs(val);
-                    else
-                        val = std::abs(val);
-                    count_ += 1;
-                }
-            }
-        }
-    }
 
     DEFINE_PRE_POST_2
 
@@ -226,73 +134,33 @@ private:
         aggr.post();
 
         GET_COL_SIZE
+        std::vector<T, typename allocator_declare<T, A>::type>  diff;
 
-        const auto  thread_level = (col_s < ThreadPool::MUL_THR_THHOLD)
-            ? 0L : ThreadGranularity::get_thread_level();
-        vec_t       diff(col_s);
-
-        if (thread_level > 2)  {
-            auto    futures =
-                ThreadGranularity::thr_pool_.parallel_loop(
-                    size_type(0),
-                    col_s,
-                    [&aggr = std::as_const(aggr.get_result()), &diff,
-                     &column_begin]
-                    (auto begin, auto end) -> void  {
-                        for (size_type i = begin; i < end; ++i)
-                            diff[i] = aggr[i] - *(column_begin + i);
-                    });
-
-            for (auto &fut : futures)  fut.get();
-        }
-        else  {
-            std::transform(aggr.get_result().begin(), aggr.get_result().end(),
-                           column_begin,
-                           diff.begin(),
-                           [](const T &agr, const T &col) -> T  {
-                               return (std::fabs(agr - col));
-                           });
-        }
+        diff.reserve(col_s);
+        std::transform(aggr.get_result().begin(), aggr.get_result().end(),
+                       column_begin,
+                       std::back_inserter(diff),
+                       [](const T &lhs, const T &rhs) -> T  {
+                           return (std::fabs(lhs - rhs));
+                       });
 
         // Calculate median absolute deviation
-        //
         aggr.pre();
         aggr(idx_begin, idx_end, diff.begin(), diff.end());
         aggr.post();
 
         const value_type    factor = num_of_std_ * unbiased_factor_;
 
-        if (col_s >= ThreadPool::MUL_THR_THHOLD &&
-            ThreadGranularity::get_thread_level() > 2)  {
-            auto    futures =
-                ThreadGranularity::thr_pool_.parallel_loop(
-                    size_type(0),
-                    col_s,
-                    [&column_begin, &diff = std::as_const(diff), factor,
-                     &aggr = std::as_const(aggr.get_result())]
-                    (auto begin, auto end) -> result_type  {
-                        result_type count { 0 };
+        std::transform(aggr.get_result().begin(), aggr.get_result().end(),
+                       aggr.get_result().begin(),
+                       [factor](const T &v) -> T { return (factor * v); });
 
-                        for (size_type i = begin; i < end; ++i)  {
-                            if (diff[i] > (aggr[i] * factor))  {
-                                *(column_begin + i) =
-                                    std::numeric_limits<T>::quiet_NaN();
-                                count += 1;
-                            }
-                        }
-                        return (count);
-                    });
-
-            for (auto &fut : futures)  count_ += fut.get();
-        }
-        else  {
-            for (size_type i = 0; i < col_s; ++i)  {
-                if (diff[i] > (aggr.get_result()[i] * factor))  {
-                    *(column_begin + i) = std::numeric_limits<T>::quiet_NaN();
-                    count_ += 1;
-                }
+        for (size_type i = 0; i < col_s; ++i)
+            if (diff[i] > aggr.get_result()[i])  {
+                *(column_begin + i) =
+                    std::numeric_limits<value_type>::quiet_NaN();
+                count_ += 1;
             }
-        }
     }
 
 public:
@@ -326,8 +194,6 @@ public:
 
 private:
 
-    using vec_t = std::vector<T, typename allocator_declare<T, A>::type>;
-
     static constexpr value_type unbiased_factor_ { value_type(1.4826) };
     const size_type             window_size_;
     const hampel_type           type_;
@@ -358,7 +224,7 @@ struct  ExpoSmootherVisitor {
 
             // Y0 = X0
             // Yt = aXt + (1 - a)Yt-1
-            for (size_type i = 1; i < count_; ++i) [[likely]]  {
+            for (size_type i = 1; i < count_; ++i)  {
                 const value_type    curr_v = *(column_begin + i);
 
                 *(column_begin + i) = prev_v + alfa_ * (curr_v - prev_v);
@@ -394,8 +260,7 @@ struct  HWExpoSmootherVisitor {
 
     template<typename K, typename H>
     inline void
-    operator() (K /*idx_begin*/, K /*idx_end*/,
-                H column_begin, H column_end)  {
+    operator() (K /*idx_begin*/, K /*idx_end*/, H column_begin, H column_end)  {
 
         count_ = std::distance(column_begin, column_end);
 
@@ -404,7 +269,7 @@ struct  HWExpoSmootherVisitor {
         value_type  prev_v = *column_begin;
         value_type  tf = *(column_begin + 1) - prev_v;
 
-        for (size_type i = 1; i < count_; ++i) [[likely]]  {
+        for (size_type i = 1; i < count_; ++i)  {
             const value_type    curr_v = *(column_begin + i);
 
             *(column_begin + i) =

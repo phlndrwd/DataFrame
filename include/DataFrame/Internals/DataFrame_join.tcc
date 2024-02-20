@@ -42,146 +42,175 @@ DataFrame<I, H>
 DataFrame<I, H>::
 join_by_index (const RHS_T &rhs, join_policy mp) const  {
 
-    static_assert(comparable<I>, "Index type must have comparison operators");
+    static_assert(
+        std::is_base_of<DataFrame<I, HeteroVector<std::size_t(H::align_value)>>,
+                        RHS_T>::value ||
+        std::is_base_of<View, RHS_T>::value ||
+        std::is_base_of<PtrView, RHS_T>::value,
+        "The rhs argument to join_by_index() can only be "
+        "StdDataFrame<IndexType> or DataFrame[Ptr]View<IndexType>");
 
-    using pair_vec_t = StlVecType<JoinSortingPair<IndexType>>;
-    using pair_vec_iter =
-        typename StlVecType<JoinSortingPair<IndexType>>::iterator;
-
-    const auto      &lhs_idx = get_index();
-    const auto      &rhs_idx = rhs.get_index();
-    const size_type lhs_idx_s = lhs_idx.size();
-    const size_type rhs_idx_s = rhs_idx.size();
-    pair_vec_t      idx_vec_lhs;
-    pair_vec_t      idx_vec_rhs;
+    const auto                              &lhs_idx = get_index();
+    const auto                              &rhs_idx = rhs.get_index();
+    const size_type                         lhs_idx_s = lhs_idx.size();
+    const size_type                         rhs_idx_s = rhs_idx.size();
+    StlVecType<JoinSortingPair<IndexType>>  idx_vec_lhs;
+    StlVecType<JoinSortingPair<IndexType>>  idx_vec_rhs;
 
     idx_vec_lhs.reserve(lhs_idx_s);
-    for (size_type i = 0; i < lhs_idx_s; ++i) [[likely]]
+    for (size_type i = 0; i < lhs_idx_s; ++i)
         idx_vec_lhs.push_back(std::make_pair(&(lhs_idx[i]), i));
     idx_vec_rhs.reserve(rhs_idx_s);
-    for (size_type i = 0; i < rhs_idx_s; ++i) [[likely]]
+    for (size_type i = 0; i < rhs_idx_s; ++i)
         idx_vec_rhs.push_back(std::make_pair(&(rhs_idx[i]), i));
 
-    auto        cf = [] (const JoinSortingPair<IndexType> &l,
-                         const JoinSortingPair<IndexType> &r) -> bool  {
-                         return (*(l.first) < *(r.first));
-                     };
-    const auto  thread_level =
-        (lhs_idx_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level();
+    auto    cf = [] (const JoinSortingPair<IndexType> &l,
+                     const JoinSortingPair<IndexType> &r) -> bool  {
+                     return (*(l.first) < *(r.first));
+                 };
 
-    if (thread_level > 3)  {
-        std::future<void>   futures[2];
-
-        futures[0] = thr_pool_.dispatch(
-            false,
-            &ThreadPool::parallel_sort<pair_vec_iter, decltype(cf)>,
-                &thr_pool_,
-                idx_vec_lhs.begin(),
-                idx_vec_lhs.end(),
-                std::move(cf));
-        futures[1] = thr_pool_.dispatch(
-            false,
-            &ThreadPool::parallel_sort<pair_vec_iter, decltype(cf)>,
-                &thr_pool_,
-                idx_vec_rhs.begin(),
-                idx_vec_rhs.end(),
-                std::move(cf));
-        futures[0].get();
-        futures[1].get();
-    }
-    else  {
-        std::sort(idx_vec_lhs.begin(), idx_vec_lhs.end(), cf);
-        std::sort(idx_vec_rhs.begin(), idx_vec_rhs.end(), cf);
-    }
+    std::sort(idx_vec_lhs.begin(), idx_vec_lhs.end(), cf);
+    std::sort(idx_vec_rhs.begin(), idx_vec_rhs.end(), cf);
 
     switch(mp)  {
         case join_policy::inner_join:
-            return (index_inner_join_<DataFrame, RHS_T, Ts ...>
-                        (*this, rhs, idx_vec_lhs, idx_vec_rhs));
+            return (index_inner_join_
+                        <decltype(*this), RHS_T, Ts ...>
+                    (*this, rhs, idx_vec_lhs, idx_vec_rhs));
         case join_policy::left_join:
-            return (index_left_join_<DataFrame, RHS_T, Ts ...>
-                        (*this, rhs, idx_vec_lhs, idx_vec_rhs));
+            return (index_left_join_
+                        <decltype(*this), RHS_T, Ts ...>
+                    (*this, rhs, idx_vec_lhs, idx_vec_rhs));
         case join_policy::right_join:
-            return (index_right_join_<DataFrame, RHS_T, Ts ...>
-                        (*this, rhs, idx_vec_lhs, idx_vec_rhs));
+            return (index_right_join_
+                        <decltype(*this), RHS_T, Ts ...>
+                    (*this, rhs, idx_vec_lhs, idx_vec_rhs));
         case join_policy::left_right_join:
         default:
-            return (index_left_right_join_<DataFrame, RHS_T, Ts ...>
-                        (*this, rhs, idx_vec_lhs, idx_vec_rhs));
+            return (index_left_right_join_
+                        <decltype(*this), RHS_T, Ts ...>
+                    (*this, rhs, idx_vec_lhs, idx_vec_rhs));
     }
 }
 
 // ----------------------------------------------------------------------------
 
 template<typename I, typename H>
-template<typename RHS_T, comparable T, typename ... Ts>
+template<typename RHS_T, typename T, typename ... Ts>
 DataFrame<unsigned int, H>
 DataFrame<I, H>::
 join_by_column (const RHS_T &rhs, const char *name, join_policy mp) const  {
 
-    using pair_vec_t = StlVecType<JoinSortingPair<T>>;
-    using pair_vec_iter = typename StlVecType<JoinSortingPair<T>>::iterator;
+    static_assert(
+        std::is_base_of<
+            DataFrame<I,
+                      HeteroVector<std::size_t(H::align_value)>>,
+                      RHS_T>::value ||
+        std::is_base_of<View, RHS_T>::value ||
+        std::is_base_of<PtrView, RHS_T>::value,
+        "The rhs argument to join_by_column() can only be "
+        "StdDataFrame<IndexType> or DataFrame[Ptr]View<IndexType>");
 
     const auto      &lhs_vec = get_column<T>(name);
     const auto      &rhs_vec = rhs.template get_column<T>(name);
     const size_type lhs_vec_s = lhs_vec.size();
     const size_type rhs_vec_s = rhs_vec.size();
-    pair_vec_t      col_vec_lhs;
-    pair_vec_t      col_vec_rhs;
+
+    StlVecType<JoinSortingPair<T>>  col_vec_lhs;
+    StlVecType<JoinSortingPair<T>>  col_vec_rhs;
 
     col_vec_lhs.reserve(lhs_vec_s);
-    for (size_type i = 0; i < lhs_vec_s; ++i) [[likely]]
+    for (size_type i = 0; i < lhs_vec_s; ++i)
         col_vec_lhs.push_back(std::make_pair(&(lhs_vec[i]), i));
     col_vec_rhs.reserve(rhs_vec_s);
-    for (size_type i = 0; i < rhs_vec_s; ++i) [[likely]]
+    for (size_type i = 0; i < rhs_vec_s; ++i)
         col_vec_rhs.push_back(std::make_pair(&(rhs_vec[i]), i));
 
-    auto        cf = [] (const JoinSortingPair<T> &l,
-                         const JoinSortingPair<T> &r) -> bool  {
-                         return (*(l.first) < *(r.first));
-                     };
-    const auto  thread_level =
-        (lhs_vec_s < ThreadPool::MUL_THR_THHOLD) ? 0L : get_thread_level();
+    auto    cf = [] (const JoinSortingPair<T> &l,
+                     const JoinSortingPair<T> &r) -> bool  {
+                     return (*(l.first) < *(r.first));
+                 };
 
-    if (thread_level > 3)  {
-        std::future<void>   futures[2];
-
-        futures[0] = thr_pool_.dispatch(
-            false,
-            &ThreadPool::parallel_sort<pair_vec_iter, decltype(cf)>,
-                &thr_pool_,
-                col_vec_lhs.begin(),
-                col_vec_lhs.end(),
-                std::move(cf));
-        futures[1] = thr_pool_.dispatch(
-            false,
-            &ThreadPool::parallel_sort<pair_vec_iter, decltype(cf)>,
-                &thr_pool_,
-                col_vec_rhs.begin(),
-                col_vec_rhs.end(),
-                std::move(cf));
-        futures[0].get();
-        futures[1].get();
-    }
-    else  {
-        std::sort(col_vec_lhs.begin(), col_vec_lhs.end(), cf);
-        std::sort(col_vec_rhs.begin(), col_vec_rhs.end(), cf);
-    }
+    std::sort(col_vec_lhs.begin(), col_vec_lhs.end(), cf);
+    std::sort(col_vec_rhs.begin(), col_vec_rhs.end(), cf);
 
     switch(mp)  {
         case join_policy::inner_join:
-            return (column_inner_join_<DataFrame, RHS_T, T, Ts ...>
-                        (*this, rhs, name, col_vec_lhs, col_vec_rhs));
+            return (column_inner_join_
+                        <decltype(*this), RHS_T, T, Ts ...>
+                            (*this, rhs, name, col_vec_lhs, col_vec_rhs));
         case join_policy::left_join:
-            return (column_left_join_<DataFrame, RHS_T, T, Ts ...>
-                        (*this, rhs, name, col_vec_lhs, col_vec_rhs));
+            return (column_left_join_
+                        <decltype(*this), RHS_T, T, Ts ...>
+                            (*this, rhs, name, col_vec_lhs, col_vec_rhs));
         case join_policy::right_join:
-            return (column_right_join_<DataFrame, RHS_T, T, Ts ...>
-                        (*this, rhs, name, col_vec_lhs, col_vec_rhs));
+            return (column_right_join_
+                        <decltype(*this), RHS_T, T, Ts ...>
+                            (*this, rhs, name, col_vec_lhs, col_vec_rhs));
         case join_policy::left_right_join:
         default:
-            return (column_left_right_join_<DataFrame, RHS_T, T, Ts ...>
-                        (*this, rhs, name, col_vec_lhs, col_vec_rhs));
+            return (column_left_right_join_
+                        <decltype(*this), RHS_T, T, Ts ...>
+                            (*this, rhs, name, col_vec_lhs, col_vec_rhs));
+    }
+}
+
+// ----------------------------------------------------------------------------
+
+template<typename I, typename H>
+template<typename LHS_T, typename RHS_T, typename IDX_T, typename ... Ts>
+void DataFrame<I, H>::
+join_helper_common_(
+    const LHS_T &lhs,
+    const RHS_T &rhs,
+    const IndexIdxVector &joined_index_idx,
+    DataFrame<IDX_T, HeteroVector<std::size_t(H::align_value)>> &result,
+    const char *skip_col_name)  {
+
+    const SpinGuard guard(lock_);
+
+    // Load the common and lhs columns
+    for (const auto &iter : lhs.column_list_)  {
+        auto    rhs_citer = rhs.column_tb_.find(iter.first);
+
+        if (skip_col_name && iter.first == skip_col_name)  continue;
+
+        // Common column between two frames
+        if (rhs_citer != rhs.column_tb_.end())  {
+            index_join_functor_common_<decltype(result), Ts ...> functor(
+                iter.first.c_str(),
+                rhs,
+                joined_index_idx,
+                result);
+
+            lhs.data_[iter.second].change(functor);
+        }
+        else  {  // lhs only column
+            // 0 = Left
+            index_join_functor_oneside_<0, decltype(result), Ts ...> functor (
+                iter.first.c_str(),
+                joined_index_idx,
+                result);
+
+            lhs.data_[iter.second].change(functor);
+        }
+    }
+
+    // Load the rhs columns
+    for (const auto &iter : rhs.column_list_)  {
+        auto    lhs_citer = lhs.column_tb_.find(iter.first);
+
+        if (skip_col_name && iter.first == skip_col_name)  continue;
+
+        if (lhs_citer == lhs.column_tb_.end())  {  // rhs only column
+            // 1 = Right
+            index_join_functor_oneside_<1, decltype(result), Ts ...> functor (
+                iter.first.c_str(),
+                joined_index_idx,
+                result);
+
+            rhs.data_[iter.second].change(functor);
+        }
     }
 }
 
@@ -194,36 +223,18 @@ index_join_helper_(const LHS_T &lhs,
                    const RHS_T &rhs,
                    const IndexIdxVector &joined_index_idx)  {
 
-    using result_t = DataFrame<IndexType, HeteroVector<align_value>>;
-
-    result_t                result;
-    const size_type         len = joined_index_idx.size();
-    StlVecType<IndexType>   result_index(len);
-    auto                    lbd =
-        [&joined_index_idx = std::as_const(joined_index_idx),
-         &result_index,
-         &lhs = std::as_const(lhs),
-         &rhs = std::as_const(rhs)]
-        (const auto begin, const auto end) -> void  {
-            for (size_type i = begin; i < end; ++i) [[likely]]  {
-                const size_type left_i = std::get<0>(joined_index_idx[i]);
-
-                result_index[i] =
-                    left_i != std::numeric_limits<size_type>::max()
-                        ? lhs.indices_[left_i]
-                        : rhs.indices_[std::get<1>(joined_index_idx[i])];
-            }
-        };
+    DataFrame<IndexType, HeteroVector<align_value>> result;
+    StlVecType<IndexType>                           result_index;
 
     // Load the index
-    if (len >= ThreadPool::MUL_THR_THHOLD && get_thread_level() > 2)  {
-        auto    futures =
-            thr_pool_.parallel_loop(size_type(0), len, std::move(lbd));
+    result_index.reserve(joined_index_idx.size());
+    for (auto citer : joined_index_idx)  {
+        const size_type left_i = std::get<0>(citer);
 
-        for (auto &fut : futures)  fut.get();
+        result_index.push_back(
+            left_i != std::numeric_limits<size_type>::max()
+                ? lhs.indices_[left_i] : rhs.indices_[std::get<1>(citer)]);
     }
-    else
-        lbd(0, len);
     result.load_index(std::move(result_index));
 
     join_helper_common_<LHS_T, RHS_T, IndexType, Ts ...>
@@ -244,61 +255,46 @@ column_join_helper_(const LHS_T &lhs,
 
     using left_idx_t = typename std::remove_reference<LHS_T>::type::IndexType;
     using right_idx_t = typename std::remove_reference<RHS_T>::type::IndexType;
-    using result_t = DataFrame<unsigned int, HeteroVector<align_value>>;
 
-    const size_type len = joined_index_idx.size();
-    result_t        result;
+    const size_type                                     jii_s =
+        joined_index_idx.size();
+    DataFrame<unsigned int, HeteroVector<align_value>>  result;
 
     // Load the new result index
     result.load_index(
-        result_t::gen_sequence_index(0, static_cast<unsigned int>(len), 1));
+        DataFrame<unsigned int, HeteroVector<align_value>>::gen_sequence_index(
+            0, static_cast<unsigned int>(jii_s), 1));
 
     // Load the lhs and rhs indices into two columns in the result
     // Also load the unified named column
-    StlVecType<left_idx_t>  lhs_index(len);
-    StlVecType<right_idx_t> rhs_index(len);
-    StlVecType<T>           named_col_vec(len);
+    StlVecType<left_idx_t>  lhs_index;
+    StlVecType<right_idx_t> rhs_index;
+    StlVecType<T>           named_col_vec;
     const ColumnVecType<T>  &lhs_named_col_vec =
         lhs.template get_column<T>(col_name);
     const ColumnVecType<T>  &rhs_named_col_vec =
         rhs.template get_column<T>(col_name);
-    auto                    lbd =
-        [&joined_index_idx = std::as_const(joined_index_idx),
-         &lhs_index, &rhs_index, &named_col_vec,
-         &lhs = std::as_const(lhs),
-         &rhs = std::as_const(rhs),
-         &lhs_named_col_vec = std::as_const(lhs_named_col_vec),
-         &rhs_named_col_vec = std::as_const(rhs_named_col_vec)]
-        (const auto begin, const auto end) -> void  {
-            for (size_type i = begin; i < end; ++i) [[likely]]  {
-                const size_type left_i = std::get<0>(joined_index_idx[i]);
-                const size_type right_i = std::get<1>(joined_index_idx[i]);
 
-                if (left_i != std::numeric_limits<size_type>::max())
-                [[likely]]  {
-                    lhs_index[i] = lhs.indices_[left_i];
-                    named_col_vec[i] = lhs_named_col_vec[left_i];
-                }
-                else  {
-                    named_col_vec[i] = rhs_named_col_vec[right_i];
-                    lhs_index[i] = get_nan<left_idx_t>();
-                }
-                if (right_i != std::numeric_limits<size_type>::max())
-                [[likely]]
-                    rhs_index[i] = rhs.indices_[right_i];
-                else
-                    rhs_index[i] = get_nan<right_idx_t>();
-            }
-        };
+    lhs_index.reserve(jii_s);
+    rhs_index.reserve(jii_s);
+    named_col_vec.reserve(jii_s);
+    for (auto citer : joined_index_idx)  {
+        const size_type left_i = std::get<0>(citer);
+        const size_type right_i = std::get<1>(citer);
 
-    if (len >= ThreadPool::MUL_THR_THHOLD && get_thread_level() > 2)  {
-        auto    futures =
-            thr_pool_.parallel_loop(size_type(0), len, std::move(lbd));
-
-        for (auto &fut : futures)  fut.get();
+        if (left_i != std::numeric_limits<size_type>::max())  {
+            lhs_index.push_back(lhs.indices_[left_i]);
+            named_col_vec.push_back(lhs_named_col_vec[left_i]);
+        }
+        else  {
+            named_col_vec.push_back(rhs_named_col_vec[right_i]);
+            lhs_index.push_back(get_nan<left_idx_t>());
+        }
+        if (right_i != std::numeric_limits<size_type>::max())
+            rhs_index.push_back(rhs.indices_[right_i]);
+        else
+            rhs_index.push_back(get_nan<right_idx_t>());
     }
-    else
-        lbd(0, len);
 
     {
         char            buffer[64];
@@ -341,32 +337,17 @@ DataFrame<I, H>::get_inner_index_idx_vector_(
     IndexIdxVector  joined_index_idx;
 
     joined_index_idx.reserve(std::min(lhs_end, rhs_end));
-    while (lhs_current != lhs_end && rhs_current != rhs_end) [[likely]] {
+    while (lhs_current != lhs_end && rhs_current != rhs_end) {
         if (*(col_vec_lhs[lhs_current].first) <
-            *(col_vec_rhs[rhs_current].first))  {
+                *(col_vec_rhs[rhs_current].first))
             lhs_current += 1;
-        }
         else  {
             if (*(col_vec_lhs[lhs_current].first) ==
-                *(col_vec_rhs[rhs_current].first))  {
-                const auto  &prev_value = *(col_vec_lhs[lhs_current].first);
-
-                while (rhs_current < rhs_end &&
-                       *(col_vec_lhs[lhs_current].first) ==
-                       *(col_vec_rhs[rhs_current].first))  {
-                    joined_index_idx.emplace_back(
-                        col_vec_lhs[lhs_current].second,
-                        col_vec_rhs[rhs_current++].second);
-                }
-                lhs_current += 1;
-                while (lhs_current < lhs_end &&
-                       *(col_vec_lhs[lhs_current].first) == prev_value)  {
-                    joined_index_idx.emplace_back(
-                        col_vec_lhs[lhs_current++].second,
-                        col_vec_rhs[rhs_current - 1].second);
-                }
-            }
-            else  rhs_current += 1;
+                    *(col_vec_rhs[rhs_current].first))
+                joined_index_idx.emplace_back(
+                    col_vec_lhs[lhs_current++].second,
+                    col_vec_rhs[rhs_current].second);
+            rhs_current += 1;
         }
     }
     return (joined_index_idx);
@@ -420,8 +401,8 @@ DataFrame<I, H>::get_left_index_idx_vector_(
     IndexIdxVector  joined_index_idx;
 
     joined_index_idx.reserve(lhs_end);
-    while (lhs_current != lhs_end || rhs_current != rhs_end) [[likely]] {
-        if (lhs_current >= lhs_end) [[unlikely]]  break;
+    while (lhs_current != lhs_end || rhs_current != rhs_end) {
+        if (lhs_current >= lhs_end)  break;
         if (rhs_current >= rhs_end)  {
             joined_index_idx.emplace_back(
                 col_vec_lhs[lhs_current++].second,
@@ -436,25 +417,10 @@ DataFrame<I, H>::get_left_index_idx_vector_(
                 std::numeric_limits<size_type>::max());
         else  {
             if (*(col_vec_lhs[lhs_current].first) ==
-                *(col_vec_rhs[rhs_current].first))  {
-                const auto  &prev_value = *(col_vec_lhs[lhs_current].first);
-
-                while (rhs_current < rhs_end &&
-                       *(col_vec_lhs[lhs_current].first) ==
-                       *(col_vec_rhs[rhs_current].first))  {
-                    joined_index_idx.emplace_back(
-                        col_vec_lhs[lhs_current].second,
-                        col_vec_rhs[rhs_current++].second);
-                }
-                lhs_current += 1;
-                while (lhs_current < lhs_end &&
-                       *(col_vec_lhs[lhs_current].first) == prev_value)  {
-                    joined_index_idx.emplace_back(
-                        col_vec_lhs[lhs_current++].second,
-                        col_vec_rhs[rhs_current - 1].second);
-                }
-            }
-            else  rhs_current += 1;
+                    *(col_vec_rhs[rhs_current].first))
+                joined_index_idx.emplace_back(col_vec_lhs[lhs_current++].second,
+                                              col_vec_rhs[rhs_current].second);
+            rhs_current += 1;
         }
     }
     return (joined_index_idx);
@@ -507,7 +473,7 @@ DataFrame<I, H>::get_right_index_idx_vector_(
     IndexIdxVector  joined_index_idx;
 
     joined_index_idx.reserve(rhs_end);
-    while (lhs_current != lhs_end || rhs_current != rhs_end) [[likely]] {
+    while (lhs_current != lhs_end || rhs_current != rhs_end) {
         if (rhs_current >= rhs_end)  break;
         if (lhs_current >= lhs_end)  {
             joined_index_idx.emplace_back(
@@ -517,34 +483,19 @@ DataFrame<I, H>::get_right_index_idx_vector_(
         }
 
         if (*(col_vec_lhs[lhs_current].first) <
-            *(col_vec_rhs[rhs_current].first))  {
+                *(col_vec_rhs[rhs_current].first))
             lhs_current += 1;
-        }
         else  {
-            if (*(col_vec_rhs[rhs_current].first) ==
-                *(col_vec_lhs[lhs_current].first))  {
-                const auto  &prev_value = *(col_vec_rhs[rhs_current].first);
-
-                while (lhs_current < lhs_end &&
-                       *(col_vec_rhs[rhs_current].first) ==
-                       *(col_vec_lhs[lhs_current].first))  {
-                    joined_index_idx.emplace_back(
-                        col_vec_lhs[lhs_current++].second,
-                        col_vec_rhs[rhs_current].second);
-                }
-                rhs_current += 1;
-                while (rhs_current < rhs_end &&
-                       *(col_vec_rhs[rhs_current].first) == prev_value)  {
-                    joined_index_idx.emplace_back(
-                        col_vec_lhs[lhs_current - 1].second,
-                        col_vec_rhs[rhs_current++].second);
-                }
-            }
-            else  {
+            if (*(col_vec_lhs[lhs_current].first) ==
+                    *(col_vec_rhs[rhs_current].first))
+                joined_index_idx.emplace_back(
+                    col_vec_lhs[lhs_current++].second,
+                    col_vec_rhs[rhs_current].second);
+            else
                 joined_index_idx.emplace_back(
                     std::numeric_limits<size_type>::max(),
-                    col_vec_rhs[rhs_current++].second);
-            }
+                    col_vec_rhs[rhs_current].second);
+            rhs_current += 1;
         }
     }
     return (joined_index_idx);
@@ -598,48 +549,36 @@ DataFrame<I, H>::get_left_right_index_idx_vector_(
     IndexIdxVector  joined_index_idx;
 
     joined_index_idx.reserve(std::max(lhs_end, rhs_end));
-    while (lhs_current != lhs_end || rhs_current != rhs_end) [[likely]] {
+    while (lhs_current != lhs_end || rhs_current != rhs_end) {
         if (lhs_current >= lhs_end && rhs_current < rhs_end)  {
             joined_index_idx.emplace_back(
                 std::numeric_limits<size_type>::max(),
                 col_vec_rhs[rhs_current++].second);
+            continue;
         }
-        else if (rhs_current >= rhs_end && lhs_current < lhs_end)  {
+        if (rhs_current >= rhs_end && lhs_current < lhs_end)  {
             joined_index_idx.emplace_back(
                 col_vec_lhs[lhs_current++].second,
                 std::numeric_limits<size_type>::max());
             continue;
         }
-        else if (*(col_vec_lhs[lhs_current].first) <
-                 *(col_vec_rhs[rhs_current].first))  {
+
+        if (*(col_vec_lhs[lhs_current].first) <
+                *(col_vec_rhs[rhs_current].first))  {
             joined_index_idx.emplace_back(
                 col_vec_lhs[lhs_current++].second,
                 std::numeric_limits<size_type>::max());
         }
         else  {
             if (*(col_vec_lhs[lhs_current].first) ==
-                *(col_vec_rhs[rhs_current].first))  {
-                const auto  &prev_value = *(col_vec_lhs[lhs_current].first);
-
-                while (rhs_current < rhs_end &&
-                       *(col_vec_lhs[lhs_current].first) ==
-                       *(col_vec_rhs[rhs_current].first))  {
-                    joined_index_idx.emplace_back(
-                        col_vec_lhs[lhs_current].second,
-                        col_vec_rhs[rhs_current++].second);
-                }
-                lhs_current += 1;
-                while (lhs_current < lhs_end &&
-                       *(col_vec_lhs[lhs_current].first) == prev_value)  {
-                    joined_index_idx.emplace_back(
-                        col_vec_lhs[lhs_current++].second,
-                        col_vec_rhs[rhs_current - 1].second);
-                }
-            }
+                    *(col_vec_rhs[rhs_current].first))
+                joined_index_idx.emplace_back(col_vec_lhs[lhs_current++].second,
+                                              col_vec_rhs[rhs_current].second);
             else
                 joined_index_idx.emplace_back(
                     std::numeric_limits<size_type>::max(),
-                    col_vec_rhs[rhs_current++].second);
+                    col_vec_rhs[rhs_current].second);
+            rhs_current += 1;
         }
     }
     return (joined_index_idx);
@@ -693,10 +632,10 @@ concat_helper_(LHS_T &lhs, const RHS_T &rhs, bool add_new_columns)  {
                            rhs.get_index().begin(), rhs.get_index().end());
 
     // Load common columns
-    for (const auto &lhs_iter : lhs.column_list_) [[likely]]  {
-        const auto  rhs_citer = rhs.column_tb_.find(lhs_iter.first);
+    for (const auto &lhs_iter : lhs.column_list_)  {
+        auto    rhs_citer = rhs.column_tb_.find(lhs_iter.first);
 
-        if (rhs_citer != rhs.column_tb_.end()) [[likely]]  {
+        if (rhs_citer != rhs.column_tb_.end())  {
             concat_functor_<LHS_T, Ts ...>  functor(lhs_iter.first.c_str(),
                                                     lhs,
                                                     false,
@@ -708,8 +647,8 @@ concat_helper_(LHS_T &lhs, const RHS_T &rhs, bool add_new_columns)  {
 
     // Load columns from rhs that do not exist in lhs
     if (add_new_columns)  {
-        for (const auto &rhs_citer : rhs.column_list_) [[likely]]  {
-            const auto  lhs_iter = lhs.column_tb_.find(rhs_citer.first);
+        for (const auto &rhs_citer : rhs.column_list_)  {
+            auto    lhs_iter = lhs.column_tb_.find(rhs_citer.first);
 
             if (lhs_iter == lhs.column_tb_.end())  {
                 concat_functor_<LHS_T, Ts ...>  functor(rhs_citer.first.c_str(),
@@ -784,7 +723,7 @@ DataFrame<I, H>::concat(const RHS_T &rhs, concat_policy cp) const  {
         result.load_index(this->get_index().begin(), this->get_index().end());
 
         for (const auto &lhs_citer : column_list_)  {
-            const auto  rhs_citer = rhs.column_tb_.find(lhs_citer.first);
+            auto    rhs_citer = rhs.column_tb_.find(lhs_citer.first);
 
             if (rhs_citer != rhs.column_tb_.end())  {
                 load_all_functor_<Ts ...>   functor(lhs_citer.first.c_str(),
@@ -826,9 +765,9 @@ DataFrame<I, H>::concat_view(RHS_T &rhs, concat_policy cp)  {
     idxvec_t        result_idx;
 
     result_idx.reserve(idx_s + rhs_idx_s);
-    for (size_type i = 0; i < idx_s; ++i) [[likely]]
+    for (size_type i = 0; i < idx_s; ++i)
         result_idx.push_back(&(get_index()[i]));
-    for (size_type i = 0; i < rhs_idx_s; ++i) [[likely]]
+    for (size_type i = 0; i < rhs_idx_s; ++i)
         result_idx.push_back(&(rhs.get_index()[i]));
     result.indices_ = std::move(result_idx);
 
@@ -853,7 +792,7 @@ DataFrame<I, H>::concat_view(RHS_T &rhs, concat_policy cp)  {
 
             data_[lhs_citer.second].change(functor);
 
-            const auto  rhs_citer = rhs.column_tb_.find(lhs_citer.first);
+            auto    rhs_citer = rhs.column_tb_.find(lhs_citer.first);
 
             if (rhs_citer != rhs.column_tb_.end())
                 rhs.data_[rhs_citer->second].change(functor);
@@ -863,7 +802,7 @@ DataFrame<I, H>::concat_view(RHS_T &rhs, concat_policy cp)  {
         for (const auto &lhs_citer : column_list_)  {
             concat_load_view_functor_<PtrView, Ts ...> functor(
                 lhs_citer.first.c_str(), result);
-            const auto                                 rhs_citer =
+            auto                                       rhs_citer =
                 rhs.column_tb_.find(lhs_citer.first);
 
             if (rhs_citer != rhs.column_tb_.end())  {
@@ -904,9 +843,9 @@ DataFrame<I, H>::concat_view(RHS_T &rhs, concat_policy cp) const  {
     idxvec_t        result_idx;
 
     result_idx.reserve(idx_s + rhs_idx_s);
-    for (size_type i = 0; i < idx_s; ++i) [[likely]]
+    for (size_type i = 0; i < idx_s; ++i)
         result_idx.push_back(&(get_index()[i]));
-    for (size_type i = 0; i < rhs_idx_s; ++i) [[likely]]
+    for (size_type i = 0; i < rhs_idx_s; ++i)
         result_idx.push_back(&(rhs.get_index()[i]));
     result.indices_ = std::move(result_idx);
 
@@ -931,7 +870,7 @@ DataFrame<I, H>::concat_view(RHS_T &rhs, concat_policy cp) const  {
 
             data_[lhs_citer.second].change(functor);
 
-            const auto  rhs_citer = rhs.column_tb_.find(lhs_citer.first);
+            auto    rhs_citer = rhs.column_tb_.find(lhs_citer.first);
 
             if (rhs_citer != rhs.column_tb_.end())
                 rhs.data_[rhs_citer->second].change(functor);
@@ -941,7 +880,7 @@ DataFrame<I, H>::concat_view(RHS_T &rhs, concat_policy cp) const  {
         for (const auto &lhs_citer : column_list_)  {
             concat_load_view_functor_<ConstPtrView, Ts ...> functor(
                 lhs_citer.first.c_str(), result);
-            const auto                                      rhs_citer =
+            auto                                                   rhs_citer =
                 rhs.column_tb_.find(lhs_citer.first);
 
             if (rhs_citer != rhs.column_tb_.end())  {
