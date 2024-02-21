@@ -25,6 +25,7 @@ hmdf_target_data_files(dataframe_tester_2
         ${PROJECT_SOURCE_DIR}/data/DT_IBM.csv
         ${PROJECT_SOURCE_DIR}/data/FORD.csv
         ${PROJECT_SOURCE_DIR}/data/IBM.csv
+        ${PROJECT_SOURCE_DIR}/data/scat_wind_odb.csv
         ${PROJECT_SOURCE_DIR}/data/sample_data_2.csv
         ${PROJECT_SOURCE_DIR}/data/sample_data_2.json
         ${PROJECT_SOURCE_DIR}/data/sample_data_no_index.csv
