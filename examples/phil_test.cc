@@ -68,10 +68,12 @@ struct  MyData  {
 // https://htmlpreview.github.io/?https://github.com/hosseinmoein/DataFrame/blob/master/docs/HTML/DataFrame.html
 //
 int main(int, char *[])  {
+  /// Creation
   std::cout << "data/IBM.csv : io_format::csv2" << std::endl;
   StrDataFrame    ibm_master;
   ibm_master.read("data/IBM.csv", io_format::csv2);
 
+  /// Slicing
   auto  above_150_fun = [](const std::string &, const double &val)-> bool { return (val > 150.0); };
   auto  above_150_df = ibm_master.get_data_by_sel<double, decltype(above_150_fun), double, long>("IBM_Close", above_150_fun);
 
@@ -80,7 +82,8 @@ int main(int, char *[])  {
 
   std::cout << "There are " << above_150_df.get_index().size() << " above_150_df indices" << std::endl;
 
-  // No way to insert this.
+  /// Row addition
+  // No way to insert this directly!
   std::string candiateRow = "2024-02-21,98.000000,98.000000,92.250000,93.500000,59.98,10651400";
 
   std::string index_val = "2024-02-21";
